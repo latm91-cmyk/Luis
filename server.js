@@ -1,5 +1,6 @@
 const express = require("express");
 const { google } = require("googleapis");
+const fetch = require("node-fetch"); // npm i node-fetch@2
 
 const app = express();
 app.use(express.json());
@@ -8,7 +9,7 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "rifas_verify_123";
 
 // ===== Google Sheets config =====
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const TAB_NAME = process.env.GOOGLE_SHEET_TAB || "cases"; // pestaña en la hoja
+const TAB_NAME = process.env.GOOGLE_SHEET_TAB || "cases";
 
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 const GOOGLE_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
@@ -23,7 +24,9 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
   });
   sheets = google.sheets({ version: "v4", auth });
 } else {
-  console.warn("⚠️ Google Sheets NO configurado. Revisa env vars: GOOGLE_SHEET_ID, GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY");
+  console.warn(
+    "⚠️ Google Sheets NO configurado. Revisa env vars: GOOGLE_SHEET_ID, GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY"
+  );
 }
 
 function todayYYMMDD() {
@@ -43,11 +46,11 @@ async function getLatestStateByWaId(wa_id) {
   });
 
   const rows = res.data.values || [];
-  // Asumimos headers en fila 1; si no tienes headers, igual funciona (solo empieza en 0)
   let lastState = "BOT";
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowWa = row?.[2];    // Col C: wa_id
+    const rowWa = row?.[2]; // Col C: wa_id
     const rowState = row?.[3]; // Col D: state
     if (rowWa === wa_id && rowState) lastState = rowState;
   }
@@ -77,8 +80,8 @@ async function getLastCaseNumberForToday() {
 }
 
 async function createCase({ wa_id, last_msg_type, receipt_media_id, receipt_is_payment }) {
+  // Si no hay Sheets, igual devolvemos un case_id para logs
   if (!sheets) {
-    // Si no hay Sheets, igual devolvemos un case_id para logs
     const case_id = `CASE-${todayYYMMDD()}-000`;
     return { case_id, state: "EN_REVISION" };
   }
@@ -90,7 +93,6 @@ async function createCase({ wa_id, last_msg_type, receipt_media_id, receipt_is_p
   const created_at = new Date().toISOString();
   const state = "EN_REVISION";
 
-  // Columnas A:I (8 columnas usadas aquí)
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
     range: `${TAB_NAME}!A:I`,
@@ -112,12 +114,65 @@ async function createCase({ wa_id, last_msg_type, receipt_media_id, receipt_is_p
   return { case_id, state };
 }
 
+// ===== WhatsApp Send (DEBUG fuerte) =====
+async function sendText(to, bodyText) {
+  const token = process.env.WHATSAPP_TOKEN; // <- poner en Render
+  const phoneNumberId = process.env.PHONE_NUMBER_ID; // <- poner en Render (985933747940097)
+
+  if (!token) {
+    console.warn("⚠️ WHATSAPP_TOKEN NO configurado en Render");
+    return { ok: false, reason: "missing_token" };
+  }
+  if (!phoneNumberId) {
+    console.warn("⚠️ PHONE_NUMBER_ID NO configurado en Render");
+    return { ok: false, reason: "missing_phone_number_id" };
+  }
+
+  const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: { body: bodyText },
+  };
+
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const raw = await resp.text();
+    console.log("📤 WhatsApp send status:", resp.status);
+    console.log("📤 WhatsApp send raw:", raw);
+
+    return { ok: resp.ok, status: resp.status, raw };
+  } catch (err) {
+    console.error("❌ Error en fetch (sendText):", err);
+    return { ok: false, reason: "fetch_error", error: String(err) };
+  }
+}
+
 // ===== Health check =====
 app.get("/", (req, res) => {
   res.send("OK - webhook vivo ✅");
 });
 
-// ===== Test Sheets: escribe una fila =====
+// ===== Test send (para probar envío sin webhook) =====
+// Ejemplo: /test-send?to=573125558821
+app.get("/test-send", async (req, res) => {
+  const to = req.query.to;
+  if (!to) return res.status(400).send("Falta ?to=573xxxxxxxxx");
+
+  const result = await sendText(to, "✅ TEST desde /test-send (Render)");
+  return res.status(200).send(result);
+});
+
+// ===== Test Sheets =====
 app.get("/test-sheet", async (req, res) => {
   try {
     if (!sheets) return res.status(500).send("Sheets NO configurado (revisa env vars)");
@@ -142,9 +197,11 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
+  // ✅ Usa VERIFY_TOKEN (no process.env directo)
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
+
   return res.sendStatus(403);
 });
 
@@ -157,30 +214,32 @@ app.post("/webhook", async (req, res) => {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const msg = value?.messages?.[0];
 
-    console.log("📩 Evento recibido:");
+    console.log("📩 Evento recibido");
+    // Para no saturar logs, puedes comentar esta línea cuando ya funcione:
     console.log(JSON.stringify(req.body, null, 2));
 
     // A veces llegan status updates sin messages
     if (!msg) return;
 
-    const wa_id = msg.from;   // número del cliente
-    const type = msg.type;    // "text", "image", "document", etc.
+    const wa_id = msg.from;
+    const type = msg.type;
 
-    // 1) Si ya está en revisión => BOT NO RESPONDE
     const state = await getLatestStateByWaId(wa_id);
+    console.log("🧭 Estado actual:", { wa_id, state, type });
+
+    // ===== Si ya está EN_REVISION, NO lo ignores: responde un mensaje corto =====
     if (state === "EN_REVISION") {
-      console.log("🛑 Bot detenido (EN_REVISION) para:", wa_id);
+      await sendText(wa_id, "🕒 Tu caso sigue en revisión. Apenas sea aprobado te avisamos.");
       return;
     }
 
-    // 2) Si llega imagen o documento => crear caso + marcar EN_REVISION
+    // ===== Imagen/Documento -> crear caso + responder =====
     if (type === "image" || type === "document") {
       const receipt_media_id =
         type === "image" ? msg.image?.id :
         type === "document" ? msg.document?.id :
         "";
 
-      // Aquí después puedes poner clasificación con IA: YES/NO/UNKNOWN
       const receipt_is_payment = "UNKNOWN";
 
       const { case_id } = await createCase({
@@ -190,20 +249,23 @@ app.post("/webhook", async (req, res) => {
         receipt_is_payment,
       });
 
-      console.log("✅ Caso creado y bot detenido:", { case_id, wa_id, type, receipt_media_id });
+      console.log("✅ Caso creado:", { case_id, wa_id, type, receipt_media_id });
 
-      // Si más adelante tienes envío activo (Cloud o WhatsApp Web), aquí enviarías:
-      // "✅ Comprobante recibido. Caso X. En revisión."
+      await sendText(wa_id, `✅ Comprobante recibido. Caso ${case_id}. En revisión.`);
       return;
     }
 
-    // 3) Si es texto => aquí entra BuilderBot (por ahora solo log)
-    const text = msg.text?.body || "";
-    console.log("🤖 Texto para IA (BuilderBot):", { wa_id, text });
+    // ===== Texto -> responder prueba + (luego BuilderBot) =====
+    if (type === "text") {
+      const text = msg.text?.body || "";
+      console.log("🤖 Texto recibido:", { wa_id, text });
 
-    // TODO: integrar BuilderBot aquí
-    // - generar respuesta
-    // - (si tienes canal de envío habilitado) enviar al usuario
+      await sendText(wa_id, "✅ Hola 👋 estoy funcionando desde Render.");
+      return;
+    }
+
+    // Otros tipos
+    console.log("ℹ️ Tipo no manejado aún:", type);
 
   } catch (err) {
     console.error("❌ Webhook processing error:", err);
