@@ -1,26 +1,35 @@
 const express = require("express");
 const { google } = require("googleapis");
 const fetch = require("node-fetch"); // npm i node-fetch@2
+const crypto = require("crypto");
+
 const OpenAI = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const app = express();
-const crypto = require("crypto");
 
+/**
+ * Guardar raw body para validar firma de Meta
+ */
 app.use(
   express.json({
     verify: (req, res, buf) => {
-      req.rawBody = buf; // guardamos el body “crudo” para validar firma
+      req.rawBody = buf;
     },
   })
 );
+
+/**
+ * Verifica que el POST venga realmente de Meta
+ */
 function verifyMetaSignature(req) {
   const appSecret = process.env.META_APP_SECRET;
   const signature = req.headers["x-hub-signature-256"];
 
+  // Si no configuras META_APP_SECRET, no bloqueamos (pero queda menos seguro)
   if (!appSecret) {
     console.warn("⚠️ META_APP_SECRET no configurado. (Seguridad desactivada)");
-    return true; // para no tumbarte el webhook si falta la env var
+    return true;
   }
 
   if (!signature || !req.rawBody) return false;
@@ -29,8 +38,16 @@ function verifyMetaSignature(req) {
     "sha256=" +
     crypto.createHmac("sha256", appSecret).update(req.rawBody).digest("hex");
 
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature, "utf8"),
+      Buffer.from(expected, "utf8")
+    );
+  } catch {
+    return false;
+  }
 }
+
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "rifas_verify_123";
 
 // ===== Google Sheets config =====
@@ -40,7 +57,6 @@ const TAB_NAME = process.env.GOOGLE_SHEET_TAB || "cases";
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 const GOOGLE_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
 
-// Crea cliente de Sheets solo si hay env vars (para evitar crasheo si falta algo)
 let sheets = null;
 if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
   const auth = new google.auth.JWT({
@@ -76,8 +92,8 @@ async function getLatestStateByWaId(wa_id) {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowWa = row?.[2]; // Col C: wa_id
-    const rowState = row?.[3]; // Col D: state
+    const rowWa = row?.[2];     // Col C: wa_id
+    const rowState = row?.[3];  // Col D: state
     if (rowWa === wa_id && rowState) lastState = rowState;
   }
   return lastState;
@@ -106,7 +122,6 @@ async function getLastCaseNumberForToday() {
 }
 
 async function createCase({ wa_id, last_msg_type, receipt_media_id, receipt_is_payment }) {
-  // Si no hay Sheets, igual devolvemos un case_id para logs
   if (!sheets) {
     const case_id = `CASE-${todayYYMMDD()}-000`;
     return { case_id, state: "EN_REVISION" };
@@ -125,14 +140,14 @@ async function createCase({ wa_id, last_msg_type, receipt_media_id, receipt_is_p
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [[
-        created_at,                // A created_at
-        case_id,                   // B case_id
-        wa_id,                     // C wa_id
-        state,                     // D state
-        last_msg_type,             // E last_msg_type
-        receipt_media_id || "",    // F receipt_media_id
+        created_at,                      // A created_at
+        case_id,                         // B case_id
+        wa_id,                           // C wa_id
+        state,                           // D state
+        last_msg_type,                   // E last_msg_type
+        receipt_media_id || "",          // F receipt_media_id
         receipt_is_payment || "UNKNOWN", // G receipt_is_payment
-        "",                        // H notes
+        "",                              // H notes
       ]],
     },
   });
@@ -140,35 +155,11 @@ async function createCase({ wa_id, last_msg_type, receipt_media_id, receipt_is_p
   return { case_id, state };
 }
 
-// ===== WhatsApp Send (DEBUG fuerte) =====
+// ===== WhatsApp Send =====
 async function sendText(to, bodyText) {
-  const token = process.env.WHATSAPP_TOKEN; // <- poner en Render
-  const phoneNumberId = process.env.PHONE_NUMBER_ID; // <- poner en Render (985933747940097)
-async function sendText(to, bodyText) {
-   ...
-}
+  const token = process.env.WHATSAPP_TOKEN;
+  const phoneNumberId = process.env.PHONE_NUMBER_ID;
 
-// 👇 AQUI MISMO PEGAS LA NUEVA FUNCIÓN 👇
-
-async function askOpenAI(userText) {
-  if (!process.env.OPENAI_API_KEY) {
-    return "⚠️ IA no configurada (falta OPENAI_API_KEY en Render).";
-  }
-
-  const resp = await openai.responses.create({
-    model: "gpt-4o-mini",
-    input: [
-      {
-        role: "system",
-        content:
-          "Eres un asistente de WhatsApp para Rifas el Agropecuario. Responde corto, claro y en español. Si piden cómo comprar, explica pasos. Si no entiendes, pregunta una sola cosa.",
-      },
-      { role: "user", content: userText },
-    ],
-  });
-
-  return (resp.output_text || "").trim() || "¿Me repites, por favor?";
-}
   if (!token) {
     console.warn("⚠️ WHATSAPP_TOKEN NO configurado en Render");
     return { ok: false, reason: "missing_token" };
@@ -207,12 +198,38 @@ async function askOpenAI(userText) {
   }
 }
 
+// ===== OpenAI helper =====
+async function askOpenAI(userText) {
+  if (!process.env.OPENAI_API_KEY) {
+    return "⚠️ IA no configurada (falta OPENAI_API_KEY en Render).";
+  }
+
+  try {
+    const resp = await openai.responses.create({
+      model: "gpt-4o-mini",
+      input: [
+        {
+          role: "system",
+          content:
+            "Eres un asistente de WhatsApp para Rifas el Agropecuario. Responde corto, claro y en español. Si preguntan cómo comprar, explica pasos. Si no entiendes, pregunta una sola cosa.",
+        },
+        { role: "user", content: userText },
+      ],
+    });
+
+    return (resp.output_text || "").trim() || "¿Me repites, por favor?";
+  } catch (err) {
+    console.error("❌ OpenAI error:", err?.message || err);
+    return "⚠️ Estoy teniendo problemas con la IA. Intenta de nuevo en un momento.";
+  }
+}
+
 // ===== Health check =====
 app.get("/", (req, res) => {
   res.send("OK - webhook vivo ✅");
 });
 
-// ===== Test send (para probar envío sin webhook) =====
+// ===== Test send =====
 // Ejemplo: /test-send?to=573125558821
 app.get("/test-send", async (req, res) => {
   const to = req.query.to;
@@ -220,6 +237,14 @@ app.get("/test-send", async (req, res) => {
 
   const result = await sendText(to, "✅ TEST desde /test-send (Render)");
   return res.status(200).send(result);
+});
+
+// ===== Test IA =====
+// Ejemplo: /test-ai?q=hola
+app.get("/test-ai", async (req, res) => {
+  const q = req.query.q || "hola";
+  const r = await askOpenAI(q);
+  res.send({ q, r });
 });
 
 // ===== Test Sheets =====
@@ -247,7 +272,6 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  // ✅ Usa VERIFY_TOKEN (no process.env directo)
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
@@ -257,20 +281,18 @@ app.get("/webhook", (req, res) => {
 
 // ===== Webhook receive =====
 app.post("/webhook", async (req, res) => {
-  // Responder rápido a Meta
+  // Seguridad: solo Meta
   if (!verifyMetaSignature(req)) {
-  console.log("❌ Firma inválida - bloqueado");
-  return res.sendStatus(403);
-}
+    console.log("❌ Firma inválida - bloqueado");
+    return res.sendStatus(403);
+  }
+
+  // Responder rápido a Meta
   res.sendStatus(200);
 
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const msg = value?.messages?.[0];
-
-    console.log("📩 Evento recibido");
-    // Para no saturar logs, puedes comentar esta línea cuando ya funcione:
-    console.log(JSON.stringify(req.body, null, 2));
 
     // A veces llegan status updates sin messages
     if (!msg) return;
@@ -281,13 +303,13 @@ app.post("/webhook", async (req, res) => {
     const state = await getLatestStateByWaId(wa_id);
     console.log("🧭 Estado actual:", { wa_id, state, type });
 
-    // ===== Si ya está EN_REVISION, NO lo ignores: responde un mensaje corto =====
+    // Si está EN_REVISION, responde corto y no llama IA
     if (state === "EN_REVISION") {
       await sendText(wa_id, "🕒 Tu caso sigue en revisión. Apenas sea aprobado te avisamos.");
       return;
     }
 
-    // ===== Imagen/Documento -> crear caso + responder =====
+    // Imagen/Documento -> crear caso + responder (sin IA)
     if (type === "image" || type === "document") {
       const receipt_media_id =
         type === "image" ? msg.image?.id :
@@ -304,24 +326,21 @@ app.post("/webhook", async (req, res) => {
       });
 
       console.log("✅ Caso creado:", { case_id, wa_id, type, receipt_media_id });
-
       await sendText(wa_id, `✅ Comprobante recibido. Caso ${case_id}. En revisión.`);
       return;
     }
 
-    // ===== Texto -> responder prueba + (luego BuilderBot) =====
+    // Texto -> IA -> WhatsApp
     if (type === "text") {
       const text = msg.text?.body || "";
       console.log("🤖 Texto recibido:", { wa_id, text });
 
-      await sendText(wa_id, "const aiReply = await askOpenAI(text);
-await sendText(wa_id, aiReply);");
+      const aiReply = await askOpenAI(text);
+      await sendText(wa_id, aiReply);
       return;
     }
 
-    // Otros tipos
     console.log("ℹ️ Tipo no manejado aún:", type);
-
   } catch (err) {
     console.error("❌ Webhook processing error:", err);
   }
