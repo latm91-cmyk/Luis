@@ -1,6 +1,8 @@
 const express = require("express");
 const { google } = require("googleapis");
 const fetch = require("node-fetch"); // npm i node-fetch@2
+const OpenAI = require("openai");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const app = express();
 const crypto = require("crypto");
@@ -142,7 +144,31 @@ async function createCase({ wa_id, last_msg_type, receipt_media_id, receipt_is_p
 async function sendText(to, bodyText) {
   const token = process.env.WHATSAPP_TOKEN; // <- poner en Render
   const phoneNumberId = process.env.PHONE_NUMBER_ID; // <- poner en Render (985933747940097)
+async function sendText(to, bodyText) {
+   ...
+}
 
+// 👇 AQUI MISMO PEGAS LA NUEVA FUNCIÓN 👇
+
+async function askOpenAI(userText) {
+  if (!process.env.OPENAI_API_KEY) {
+    return "⚠️ IA no configurada (falta OPENAI_API_KEY en Render).";
+  }
+
+  const resp = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      {
+        role: "system",
+        content:
+          "Eres un asistente de WhatsApp para Rifas el Agropecuario. Responde corto, claro y en español. Si piden cómo comprar, explica pasos. Si no entiendes, pregunta una sola cosa.",
+      },
+      { role: "user", content: userText },
+    ],
+  });
+
+  return (resp.output_text || "").trim() || "¿Me repites, por favor?";
+}
   if (!token) {
     console.warn("⚠️ WHATSAPP_TOKEN NO configurado en Render");
     return { ok: false, reason: "missing_token" };
@@ -288,7 +314,8 @@ app.post("/webhook", async (req, res) => {
       const text = msg.text?.body || "";
       console.log("🤖 Texto recibido:", { wa_id, text });
 
-      await sendText(wa_id, "✅ Hola 👋 estoy funcionando desde Render.");
+      await sendText(wa_id, "const aiReply = await askOpenAI(text);
+await sendText(wa_id, aiReply);");
       return;
     }
 
