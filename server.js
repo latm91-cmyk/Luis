@@ -43,7 +43,14 @@ function verifyMetaSignature(req) {
     "sha256=" +
     crypto.createHmac("sha256", appSecret).update(req.rawBody).digest("hex");
 
-  return signature === expected;
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected)
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function sendText(to, bodyText) {
@@ -73,7 +80,7 @@ async function getAllRows() {
   return res.data.values || [];
 }
 
-/* ================= LOGICA COMPRA ================= */
+/* ================= LOGICA ================= */
 
 function isBuyIntent(text = "") {
   const t = text.toLowerCase();
@@ -83,8 +90,7 @@ function isBuyIntent(text = "") {
     t.includes("boleta") ||
     t.includes("boletas") ||
     t.includes("participar") ||
-    t.includes("quiero más") ||
-    t.includes("otra")
+    t.includes("quiero")
   );
 }
 
@@ -148,7 +154,6 @@ async function monitorAprobados() {
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    const case_id = row?.[1];
     const wa_id = row?.[2];
     const state = row?.[3];
     const notes = row?.[7];
@@ -200,6 +205,7 @@ app.post("/webhook", async (req, res) => {
   if (type === "text") {
     const text = msg.text?.body || "";
 
+    /* 🔥 PRIMERO detectar intención de compra */
     if (isBuyIntent(text)) {
       await sendText(
         wa_id,
@@ -208,6 +214,7 @@ app.post("/webhook", async (req, res) => {
       return;
     }
 
+    /* 🔽 DESPUÉS revisar estado */
     if (state === "EN_REVISION") {
       await sendText(wa_id, "🕒 Tu comprobante está en revisión.");
       return;
@@ -226,7 +233,10 @@ app.post("/webhook", async (req, res) => {
       return;
     }
 
-    await sendText(wa_id, "¿Te gustaría conocer nuestros premios o comprar boletas?");
+    await sendText(
+      wa_id,
+      "¿Te gustaría conocer nuestros premios o comprar boletas?"
+    );
     return;
   }
 
@@ -242,6 +252,8 @@ app.post("/webhook", async (req, res) => {
     );
   }
 });
+
+/* ================= INICIO ================= */
 
 setInterval(monitorAprobados, 30000);
 
