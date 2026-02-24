@@ -32,6 +32,10 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
   sheets = google.sheets({ version: "v4", auth });
 }
 
+/* ================= MEMORIA TEMPORAL ================= */
+
+const followUps = new Map();
+
 /* ================= UTIL ================= */
 
 function verifyMetaSignature(req) {
@@ -80,7 +84,7 @@ async function getAllRows() {
   return res.data.values || [];
 }
 
-/* ================= LOGICA ================= */
+/* ================= LOGICA COMPRA ================= */
 
 function isBuyIntent(text = "") {
   const t = text.toLowerCase();
@@ -88,7 +92,6 @@ function isBuyIntent(text = "") {
     t.includes("comprar") ||
     t.includes("precio") ||
     t.includes("boleta") ||
-    t.includes("boletas") ||
     t.includes("participar") ||
     t.includes("quiero")
   );
@@ -198,6 +201,12 @@ app.post("/webhook", async (req, res) => {
   const wa_id = msg.from;
   const type = msg.type;
 
+  // Si el cliente responde, cancelar recordatorio pendiente
+  if (followUps.has(wa_id)) {
+    clearTimeout(followUps.get(wa_id));
+    followUps.delete(wa_id);
+  }
+
   const rows = await getAllRows();
   const last = rows.filter(r => r?.[2] === wa_id).pop();
   const state = last?.[3];
@@ -205,23 +214,40 @@ app.post("/webhook", async (req, res) => {
   if (type === "text") {
     const text = msg.text?.body || "";
 
-    /* 🔥 PRIMERO detectar intención de compra */
     if (isBuyIntent(text)) {
+
       await sendText(
         wa_id,
-        "🔥 Excelente decisión 🙌 ¿Cuántas boletas deseas comprar?"
+        "🔥 Excelente decisión 🙌\n\n" +
+        "🎟 1 boleta: $15.000\n" +
+        "🎟🎟 2 boletas: $25.000\n" +
+        "🎟🎟🎟🎟🎟 5 boletas: $60.000 (MEJOR OPCIÓN 🔥)\n\n" +
+        "Te recomiendo el combo de 5 porque ahorras $15.000.\n\n" +
+        "¿Te aparto 5 ahora mismo?"
       );
+
+      // Programar 1 solo recordatorio elegante
+      const timeout = setTimeout(async () => {
+        await sendText(
+          wa_id,
+          "👋 Solo paso a confirmar si deseas participar.\n\n" +
+          "Puedo apartarte las boletas ahora mismo."
+        );
+        followUps.delete(wa_id);
+      }, 20 * 60 * 1000); // 20 minutos
+
+      followUps.set(wa_id, timeout);
+
       return;
     }
 
-    /* 🔽 DESPUÉS revisar estado */
     if (state === "EN_REVISION") {
       await sendText(wa_id, "🕒 Tu comprobante está en revisión.");
       return;
     }
 
     if (state === "APROBADO") {
-      await sendText(wa_id, "🎟️ Ya aprobamos tu pago. En breve enviamos tu boleta.");
+      await sendText(wa_id, "🎟️ Tu pago fue aprobado. En breve enviamos tu boleta.");
       return;
     }
 
@@ -235,7 +261,7 @@ app.post("/webhook", async (req, res) => {
 
     await sendText(
       wa_id,
-      "¿Te gustaría conocer nuestros premios o comprar boletas?"
+      "¿Te gustaría participar o conocer los premios disponibles?"
     );
     return;
   }
