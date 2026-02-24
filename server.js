@@ -2,10 +2,8 @@ const express = require("express");
 const { google } = require("googleapis");
 const fetch = require("node-fetch");
 const crypto = require("crypto");
-const OpenAI = require("openai");
 
 const app = express();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 app.use(
   express.json({
@@ -15,13 +13,9 @@ app.use(
   })
 );
 
-/* ==========================
-   CONFIG
-========================== */
+/* ================= CONFIG ================= */
 
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "rifas_verify_123";
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
-
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const TAB_NAME = process.env.GOOGLE_SHEET_TAB || "cases";
 
@@ -38,9 +32,7 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
   sheets = google.sheets({ version: "v4", auth });
 }
 
-/* ==========================
-   UTILIDADES
-========================== */
+/* ================= UTIL ================= */
 
 function verifyMetaSignature(req) {
   const appSecret = process.env.META_APP_SECRET;
@@ -51,23 +43,14 @@ function verifyMetaSignature(req) {
     "sha256=" +
     crypto.createHmac("sha256", appSecret).update(req.rawBody).digest("hex");
 
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expected)
-    );
-  } catch {
-    return false;
-  }
+  return signature === expected;
 }
 
 async function sendText(to, bodyText) {
   const token = process.env.WHATSAPP_TOKEN;
   const phoneNumberId = process.env.PHONE_NUMBER_ID;
 
-  const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
-
-  await fetch(url, {
+  await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -90,9 +73,20 @@ async function getAllRows() {
   return res.data.values || [];
 }
 
-/* ==========================
-   CREAR CASE
-========================== */
+/* ================= LOGICA COMPRA ================= */
+
+function isBuyIntent(text = "") {
+  const t = text.toLowerCase();
+  return (
+    t.includes("comprar") ||
+    t.includes("precio") ||
+    t.includes("boleta") ||
+    t.includes("boletas") ||
+    t.includes("participar") ||
+    t.includes("quiero más") ||
+    t.includes("otra")
+  );
+}
 
 function todayYYMMDD() {
   const d = new Date();
@@ -145,51 +139,38 @@ async function createCase(wa_id, type, media_id) {
   return case_id;
 }
 
-/* ==========================
-   MONITOR AUTOMÁTICO APROBADO
-========================== */
+/* ================= MONITOR APROBADO ================= */
 
 async function monitorAprobados() {
-  try {
-    if (!sheets) return;
+  if (!sheets) return;
 
-    const rows = await getAllRows();
+  const rows = await getAllRows();
 
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      const case_id = row?.[1];
-      const wa_id = row?.[2];
-      const state = row?.[3];
-      const notes = row?.[7];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const case_id = row?.[1];
+    const wa_id = row?.[2];
+    const state = row?.[3];
+    const notes = row?.[7];
 
-      if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
-        console.log("🔔 Detectado APROBADO:", case_id);
+    if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
 
-        await sendText(
-          wa_id,
-          "✅ Tu pago fue aprobado. En breve te enviamos tu boleta. 🙌"
-        );
+      await sendText(
+        wa_id,
+        "✅ Tu pago fue aprobado. En breve te enviamos tu boleta. 🙌"
+      );
 
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${TAB_NAME}!H${i + 1}`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: {
-            values: [["NOTIFIED_APROBADO"]],
-          },
-        });
-
-        console.log("✅ Notificado y marcado.");
-      }
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${TAB_NAME}!H${i + 1}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [["NOTIFIED_APROBADO"]] },
+      });
     }
-  } catch (err) {
-    console.error("Error monitor:", err);
   }
 }
 
-/* ==========================
-   WEBHOOK META
-========================== */
+/* ================= WEBHOOK ================= */
 
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -199,7 +180,7 @@ app.get("/webhook", (req, res) => {
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
-  return res.sendStatus(403);
+  res.sendStatus(403);
 });
 
 app.post("/webhook", async (req, res) => {
@@ -216,16 +197,36 @@ app.post("/webhook", async (req, res) => {
   const last = rows.filter(r => r?.[2] === wa_id).pop();
   const state = last?.[3];
 
-  if (state === "EN_REVISION") {
-    await sendText(wa_id, "🕒 Tu comprobante está en revisión.");
-    return;
-  }
-  if (state === "APROBADO") {
-    await sendText(wa_id, "✅ Pago aprobado. En breve enviamos tu boleta.");
-    return;
-  }
-  if (state === "BOLETA_ENVIADA") {
-    await sendText(wa_id, "🎟️ Tu boleta ya fue enviada.");
+  if (type === "text") {
+    const text = msg.text?.body || "";
+
+    if (isBuyIntent(text)) {
+      await sendText(
+        wa_id,
+        "🔥 Excelente decisión 🙌 ¿Cuántas boletas deseas comprar?"
+      );
+      return;
+    }
+
+    if (state === "EN_REVISION") {
+      await sendText(wa_id, "🕒 Tu comprobante está en revisión.");
+      return;
+    }
+
+    if (state === "APROBADO") {
+      await sendText(wa_id, "🎟️ Ya aprobamos tu pago. En breve enviamos tu boleta.");
+      return;
+    }
+
+    if (state === "BOLETA_ENVIADA") {
+      await sendText(
+        wa_id,
+        "🎉 Tu boleta ya fue enviada. ¿Quieres participar nuevamente?"
+      );
+      return;
+    }
+
+    await sendText(wa_id, "¿Te gustaría conocer nuestros premios o comprar boletas?");
     return;
   }
 
@@ -239,19 +240,11 @@ app.post("/webhook", async (req, res) => {
       wa_id,
       `✅ Comprobante recibido. Caso ${case_id}. En revisión.`
     );
-    return;
   }
-
-  await sendText(wa_id, "¿En qué puedo ayudarte?");
 });
-
-/* ==========================
-   INICIO SERVIDOR
-========================== */
 
 setInterval(monitorAprobados, 30000);
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log("🚀 Servidor corriendo en puerto " + PORT);
-});
+app.listen(process.env.PORT || 10000, () =>
+  console.log("Servidor corriendo")
+);
