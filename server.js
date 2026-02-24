@@ -3,8 +3,32 @@ const { google } = require("googleapis");
 const fetch = require("node-fetch"); // npm i node-fetch@2
 
 const app = express();
-app.use(express.json());
+const crypto = require("crypto");
 
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf; // guardamos el body “crudo” para validar firma
+    },
+  })
+);
+function verifyMetaSignature(req) {
+  const appSecret = process.env.META_APP_SECRET;
+  const signature = req.headers["x-hub-signature-256"];
+
+  if (!appSecret) {
+    console.warn("⚠️ META_APP_SECRET no configurado. (Seguridad desactivada)");
+    return true; // para no tumbarte el webhook si falta la env var
+  }
+
+  if (!signature || !req.rawBody) return false;
+
+  const expected =
+    "sha256=" +
+    crypto.createHmac("sha256", appSecret).update(req.rawBody).digest("hex");
+
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "rifas_verify_123";
 
 // ===== Google Sheets config =====
@@ -208,6 +232,10 @@ app.get("/webhook", (req, res) => {
 // ===== Webhook receive =====
 app.post("/webhook", async (req, res) => {
   // Responder rápido a Meta
+  if (!verifyMetaSignature(req)) {
+  console.log("❌ Firma inválida - bloqueado");
+  return res.sendStatus(403);
+}
   res.sendStatus(200);
 
   try {
