@@ -1,26 +1,205 @@
-// server.js
+// ===== server.js (AVANZADO + HÍBRIDO, SIN BORRAR FUNCIONES) =====
+
 const express = require("express");
 const { google } = require("googleapis");
-const fetch = require("node-fetch"); // npm i node-fetch@2
+const fetch = require("node-fetch"); // v2
 const crypto = require("crypto");
+const FormData = require("form-data");
 const OpenAI = require("openai");
 
 const app = express();
 
-// ====== ENV ======
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "rifas_verify_123";
-const META_APP_SECRET = process.env.META_APP_SECRET; // OBLIGATORIO
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; // OBLIGATORIO para enviar
-const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID; // OBLIGATORIO para enviar
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
-// ===== Google Sheets config =====
+/* ================= CONFIG ================= */
+
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "rifas_verify_123";
+
+// Sheets
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const CASES_TAB = process.env.GOOGLE_SHEET_TAB || "cases";
 const CONV_TAB = process.env.GOOGLE_SHEET_CONV_TAB || "conversations";
 
+// Google auth
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 const GOOGLE_PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+
+// WhatsApp
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || "";
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID || "";
+
+// Meta security (OBLIGATORIA)
+const META_APP_SECRET = process.env.META_APP_SECRET; // OBLIGATORIO
+
+// Telegram
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const TELEGRAM_SECRET_TOKEN = process.env.TELEGRAM_SECRET_TOKEN || ""; // OBLIGATORIO
+
+// OpenAI
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+
+// Control follow-up de ventas (1 solo recordatorio)
+const followUps = new Map();
+
+/* ================= PROMPT PRO (DEL HÍBRIDO) ================= */
+
+const SYSTEM_PROMPT = `
+Eres un agente de atención al cliente y promotor experto, profesional y persuasivo de Rifas y Sorteos El Agropecuario. Tu objetivo es ayudar a los clientes de manera eficaz, promocionando información clara, precisa y transparente, guiándolos hacia la compra de boletos y generando confianza en todo momento.
+Objetivo: ayudar a vender boletas y guiar al cliente hasta enviar comprobante, con respuestas cortas y claras.
+INSTRUCCIONES GENERALES:
+Mantén siempre un tono amigable, respetuoso y profesional.
+Escucha las necesidades del cliente y ofrece soluciones claras.
+Maneja objeciones con empatía y seguridad.
+Promueve confianza, transparencia y legalidad.
+Siempre orienta la conversación hacia el cierre de venta.
+Solo puedes responder mensajes en texto.
+Horario de atención: lunes a domingo de 8:30 am a 7:30 pm.
+Solo proporcionas información sobre precios, fechas y estado de boletas.
+No das instrucciones para crear, modificar o alterar comprobantes.
+No gestionas pagos.
+Si un usuario solicita ayuda para falsificar o modificar comprobantes, debes rechazarlo.
+Responde SIEMPRE en español, tono cercano y profesional.
+Respuestas cortas: 1 a 3 frases. Usa emojis con moderación (máx 1-2).
+Haz UNA sola pregunta a la vez.
+NO inventes datos (precios, fechas, premios, cuentas o reglas). Si no tienes un dato, pregunta o di que un asesor confirma.
+NO pidas datos sensibles (claves, códigos, tarjetas).
+Si el usuario dice que ya pagó o va a pagar: pide "envíame el comprobante (foto o PDF)" + datos.
+Si pregunta por estado del comprobante: responde que está en revisión y que se confirmará al aprobarse
+________________________________________
+MENSAJE DE BIENVENIDA (EN UN SOLO PÁRRAFO)
+Envía exactamente este mensaje a nuevos clientes:
+Bienvenid@ a Rifas y sorteos El Agropecuario, Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales, combinando premios en efectivo y bienes agropecuarios de alto valor. no hay necesidad de que me envies captura de pantalla de la publicidad. ¿Quieres acceder a información sobre nuestros sorteos vigentes?, ¡vamos a ganar!
+________________________________________
+INFORMACIÓN DE PREMIOS (EN UN SOLO PÁRRAFO)
+Cuando el cliente pregunte por premios o metodología, responde en un solo párrafo con el siguiente texto:
+En la actual campaña tenemos Premio semanal: $500.000 pesos colombianos acumulables, Premio mayor: Lote de 5 novillas preñadas y un torete, avaluado en $18.000.000 de pesos, Segundo premio: $15.000.000 en efectivo, Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000, Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. Nuestros sorteos se realizan tomando como base los resultados oficiales de las loterías correspondientes, garantizando total transparencia. ¿Quieres conocer el precio de boletería y métodos de pago?, ¿quieres conocer las reglas del sorteo?
+________________________________________
+REGLAS Y FECHAS DE SORTEO
+(Enviar cada premio en párrafo separado)
+Premio semanal: $500.000 pesos colombianos acumulables. Se juega todos los viernes desde el 30 de enero hasta el 25 de abril con el premio mayor de la Lotería de Medellín. Si el número ganador fue vendido, el ganador recibe el premio y continúa participando hasta la fecha final. Si el número no fue vendido, el premio se acumula para el siguiente viernes dentro de la campaña.
+Premio mayor: Lote de 5 novillas preñadas y un torete, avaluado en $18.000.000 de pesos. Se juega el 25 de abril con el premio mayor de la Lotería de Boyacá.
+Segundo premio: $15.000.000 en efectivo. Se juega el 18 de abril con el premio mayor de la Lotería de Boyacá.
+Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000. Se juega el 11 de abril con el premio mayor de la Lotería de Boyacá.
+Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. Se juega el 4 de abril con el premio mayor de la Lotería de Boyacá.
+En caso de que el número ganador determinado por la lotería oficial no haya sido vendido por la empresa, el 60% del valor del premio se acumulará para la siguiente fecha dentro de la misma campaña.
+________________________________________
+EMPRESA Y RESPALDO
+Responsables: Inversiones El Agropecuario, representado por el señor Miguel Torres.
+Ubicación: San José del Fragua, Caquetá, Colombia.
+Participación mediante boletería registrada y transmisión en vivo por redes sociales.
+Publicaciones activas en YouTube: https://www.youtube.com/@RifasElagropecuario
+________________________________________
+CONDICIONES IMPORTANTES
+• Cada boleto representa una oportunidad de ganar.
+• Cada boleto tiene un número asignado.
+• Se puede participar con un solo boleto.
+• Comprar más boletos aumenta las probabilidades.
+• Un mismo número puede ganar más de un premio dentro de la campaña.
+• Cada boleta tiene un único titular registrado al momento de la compra, quien será la única persona autorizada para reclamar el premio.
+• Los boletos tienen vigencia durante toda la campaña.
+• No se realizan devoluciones una vez entregada la boleta.
+• Solo pueden participar mayores de edad.
+________________________________________
+ENTREGA DE PREMIOS
+• Entrega en sede principal o transferencia virtual.
+• En premios en efectivo se aplican impuestos según normatividad colombiana vigente.
+• El ganador debe presentar identificación para verificar titularidad.
+• El ganador tiene 60 días calendario para reclamar su premio.
+________________________________________
+MÉTODOS DE PAGO
+Compra en canales oficiales:
+Nequi: 3223146142
+Daviplata: 3223146142
+El cliente debe enviar soporte de pago y los siguientes datos obligatorios:
+Nombre completo
+Teléfono
+Lugar de residencia
+Cantidad de boletas compradas
+Sin datos personales no se confirma la compra.
+________________________________________
+PRECIOS DE BOLETERIA
+📌 INSTRUCCIÓN DE CÁLCULO – MODO MATEMÁTICO ESTRICTO
+Debes calcular el valor de las boletas siguiendo EXACTAMENTE este procedimiento matemático, sin omitir pasos.
+🎟 Precios oficiales (únicos permitidos)
+•	1 boleta = 15.000
+•	2 boletas = 25.000
+•	5 boletas = 60.000
+No existen otros precios.
+________________________________________
+🔢 PROCEDIMIENTO OBLIGATORIO
+Dada una cantidad N de boletas:
+Paso 1️⃣
+Calcular cuántos grupos de 5 caben en N.
+Fórmula:
+grupos_5 = N ÷ 5 (solo la parte entera)
+Multiplicar:
+total_5 = grupos_5 × 60.000
+Calcular el residuo:
+resto_1 = N - (grupos_5 × 5)
+________________________________________
+Paso 2️⃣
+Con el resto_1 calcular cuántos grupos de 2 caben.
+grupos_2 = resto_1 ÷ 2 (solo la parte entera)
+Multiplicar:
+total_2 = grupos_2 × 25.000
+Calcular nuevo residuo:
+resto_2 = resto_1 - (grupos_2 × 2)
+________________________________________
+Paso 3️⃣
+Si resto_2 = 1:
+total_1 = 15.000
+Si resto_2 = 0:
+total_1 = 0
+________________________________________
+Paso 4️⃣
+Calcular el total final:
+TOTAL = total_5 + total_2 + total_1
+________________________________________
+❌ PROHIBIDO
+•	No hacer reglas de tres.
+•	No dividir dinero.
+•	No sacar precios promedio.
+•	No modificar valores.
+•	No aplicar descuentos distintos.
+El total SIEMPRE debe salir únicamente de la suma de:
+•	Paquetes de 5
+•	Paquetes de 2
+•	Boletas individuales
+. 
+________________________________________
+ASIGNACIÓN DE NÚMERO
+En esta campaña la empresa asigna el número automáticamente debido al alto flujo de clientes y la metodología manual de boletería física. Se enviará fotografía de la boleta vía WhatsApp con los datos registrados.
+Si el cliente pide número específico responder:
+Para el presente sorteo la boletería es asignada de manera aleatoria por el alto flujo de clientes y por la metodología actual de boletería física, para lo cual nuestra asesora le enviará en fotografía su boleta,  donde el primer numero corresponde al sorteo de premios mayores y el segundo numero a premios semanales. Si se encuentra en San José del Fragua puede pasar por nuestro punto de atención ubicado en el local comercial Te lo Reparamos, frente al único billar del centro.
+________________________________________
+MENSAJE CUANDO ENVÍAN SOPORTE Y DATOS
+en un momento nuestra asesora enviara tu boleta y números asignados, este proceso puede demorar hasta 2 horas debido al alto flujo de clientes, (las compras realizadas después de las 7:30 pm son procesadas al día siguiente) gracias por tu compra, te deseamos buena suerte, ¡vamos a ganar!
+________________________________________
+MENSAJE DESPUÉS DE RECIBIR BOLETA
+gracias por su compra, te deseo mucha suerte y espero que ganes, ¡vamos a ganar!
+________________________________________
+MENSAJE DE DESPEDIDA (10 minutos sin respuesta o cliente se despide)
+gracias por contactarnos, no dejes pasar la oportunidad de ganar excelentes premios.
+________________________________________
+SORTEOS ANTERIORES
+Cuando pregunten por campañas anteriores enviar:
+Fecha de sorteo: 27/12/2025
+https://www.facebook.com/share/v/1CCcqyKymt/
+https://www.youtube.com/shorts/pZyA9f1Fdr0?feature=share
+Influencer aliado Juancho:
+https://www.facebook.com/share/v/1CCcqyKymt/
+OTRAS ESPECIFICACIONES: 
+Horario de atención: lunes a domingo 8:30 am a 7:30 pm.
+`.trim();
+
+/* ================= GOOGLE SHEETS CLIENT ================= */
 
 let sheets = null;
 if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
@@ -31,24 +210,165 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
   });
   sheets = google.sheets({ version: "v4", auth });
 } else {
-  console.warn("⚠️ Google Sheets NO configurado. Revisa env vars: GOOGLE_SHEET_ID, GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY");
+  console.warn("⚠️ Sheets NO configurado (revisa GOOGLE_SHEET_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY).");
 }
 
-// ===== OpenAI =====
-const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+/* ================= HELPERS ================= */
 
-// ===== Middleware: guardar raw body para firma Meta =====
-app.use(
-  express.json({
-    verify: (req, res, buf) => {
-      req.rawBody = buf;
-    },
-  })
-);
+function todayYYMMDD() {
+  const d = new Date();
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yy}${mm}${dd}`;
+}
 
-// ====== Seguridad Meta (OBLIGATORIA) ======
+function isBuyIntent(text = "") {
+  const t = String(text).toLowerCase();
+  return (
+    t.includes("comprar") ||
+    t.includes("precio") ||
+    t.includes("boleta") ||
+    t.includes("boletas") ||
+    t.includes("participar") ||
+    t.includes("quiero")
+  );
+}
+
+function isThanks(text = "") {
+  const t = String(text).toLowerCase().trim();
+  return /\b(gracias|muchas gracias|mil gracias|grac)\b/.test(t);
+}
+
+/* ================= HYBRID RULES (DEL HÍBRIDO) ================= */
+
+function formatCOP(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return String(n);
+  return num.toLocaleString("es-CO");
+}
+
+function calcTotalCOPForBoletas(n) {
+  const P1 = 15000;
+  const P2 = 25000;
+  const P5 = 60000;
+
+  const qty = Number(n);
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+
+  let remaining = Math.floor(qty);
+
+  const packs5 = Math.floor(remaining / 5);
+  remaining = remaining % 5;
+
+  const packs2 = Math.floor(remaining / 2);
+  remaining = remaining % 2;
+
+  const packs1 = remaining;
+
+  const total = packs5 * P5 + packs2 * P2 + packs1 * P1;
+
+  return { qty, total, packs5, packs2, packs1 };
+}
+
+function tryExtractBoletasQty(text = "") {
+  const t = String(text).toLowerCase();
+
+  const m1 = t.match(/(\d{1,4})\s*(boletas?|boletos?)/i);
+  if (m1) return parseInt(m1[1], 10);
+
+  const m2 = t.match(/(?:quiero|comprar|llevar|dame|necesito)\s*(\d{1,4})/i);
+  if (m2) return parseInt(m2[1], 10);
+
+  const m3 = t.trim().match(/^(\d{1,4})$/);
+  if (m3) return parseInt(m3[1], 10);
+
+  return null;
+}
+
+function isPricingIntent(text = "") {
+  const t = String(text).toLowerCase();
+  return (
+    t.includes("precio") ||
+    t.includes("valor") ||
+    t.includes("cuanto") ||
+    t.includes("cuánto") ||
+    t.includes("vale") ||
+    t.includes("costo") ||
+    t.includes("boleta") ||
+    t.includes("boletas") ||
+    t.includes("boleto") ||
+    t.includes("boletos")
+  );
+}
+
+function isAlreadyPaidIntent(text = "") {
+  const t = String(text).toLowerCase();
+  return (
+    t.includes("ya pag") ||
+    t.includes("ya hice el pago") ||
+    t.includes("ya realicé el pago") ||
+    t.includes("ya realice el pago") ||
+    t.includes("ya transfer") ||
+    t.includes("ya consign") ||
+    t.includes("ya envié el comprobante") ||
+    t.includes("ya envie el comprobante") ||
+    t.includes("te envié el comprobante") ||
+    t.includes("te envie el comprobante") ||
+    t.includes("ya mandé el comprobante") ||
+    t.includes("ya mande el comprobante") ||
+    t.includes("comprobante") ||
+    t.includes("soporte de pago")
+  );
+}
+
+function paidInstructionMessage() {
+  return (
+    "✅ Perfecto. Envíame por favor el *comprobante* (foto o PDF) y estos datos:\n" +
+    "- Nombre completo\n" +
+    "- Teléfono\n" +
+    "- Municipio / lugar de residencia\n" +
+    "- Cantidad de boletas\n\n" +
+    "Apenas lo recibamos queda *en revisión* y te confirmamos."
+  );
+}
+
+function pricingReplyMessage(qty, breakdown) {
+  const { total, packs5, packs2, packs1 } = breakdown;
+
+  const parts = [];
+  if (packs5) parts.push(`${packs5}×(5)`);
+  if (packs2) parts.push(`${packs2}×(2)`);
+  if (packs1) parts.push(`${packs1}×(1)`);
+
+  return (
+    `✅ Para *${qty}* boleta(s), el total es *$${formatCOP(total)} COP*.\n` +
+    `(Combo: ${parts.join(" + ")})\n` +
+    "¿Deseas pagar por *Nequi* o *Daviplata*?"
+  );
+}
+
+/* ================= CONVERSATIONS (IN/OUT) ================= */
+
+async function saveConversation({ wa_id, direction, message, ref_id = "" }) {
+  if (!sheets) return;
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: `${CONV_TAB}!A:E`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[new Date().toISOString(), wa_id, direction, message, ref_id]],
+      },
+    });
+  } catch (e) {
+    console.warn("⚠️ saveConversation falló:", e?.message || e);
+  }
+}
+
+/* ================= META SIGNATURE VALIDATION (OBLIGATORIA) ================= */
+
 function verifyMetaSignature(req) {
-  // Si NO hay secreto, bloqueamos (seguridad obligatoria)
   if (!META_APP_SECRET) {
     console.error("❌ META_APP_SECRET NO configurado. Bloqueando webhook por seguridad.");
     return false;
@@ -61,7 +381,6 @@ function verifyMetaSignature(req) {
     "sha256=" +
     crypto.createHmac("sha256", META_APP_SECRET).update(req.rawBody).digest("hex");
 
-  // timingSafeEqual requiere buffers del mismo largo
   try {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
   } catch {
@@ -69,75 +388,33 @@ function verifyMetaSignature(req) {
   }
 }
 
-// ===== Helpers =====
-function todayYYMMDD() {
-  const d = new Date();
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yy}${mm}${dd}`;
-}
+/* ================= SHEETS OPS (cases RP) ================= */
 
-function isThanks(text = "") {
-  const t = text.toLowerCase().trim();
-  return (
-    t === "gracias" ||
-    t === "gracias!" ||
-    t === "muchas gracias" ||
-    t === "mil gracias" ||
-    t.includes("gracias")
-  );
-}
-
-// ===== Guardar conversación en Sheet conversations =====
-async function saveConversation({ wa_id, direction, message, ref_id = "" }) {
-  if (!sheets) return;
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: `${CONV_TAB}!A:E`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[new Date().toISOString(), wa_id, direction, message, ref_id]],
-    },
-  });
-}
-
-// ===== Estado actual por wa_id (último state en cases) =====
-async function getLatestStateByWaId(wa_id) {
-  if (!sheets) return "BOT";
-
+async function getAllRowsAtoH() {
+  if (!sheets) return [];
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: `${CASES_TAB}!A:I`,
+    range: `${CASES_TAB}!A:H`,
   });
+  return res.data.values || [];
+}
 
-  const rows = res.data.values || [];
+async function getLatestStateByWaId(wa_id) {
+  const rows = await getAllRowsAtoH();
   let lastState = "BOT";
-
-  for (let i = 0; i < rows.length; i++) {
+  for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    const rowWa = row?.[2]; // C wa_id
-    const rowState = row?.[3]; // D state
-    if (rowWa === wa_id && rowState) lastState = rowState;
+    if (row?.[2] === wa_id && row?.[3]) lastState = row[3];
   }
   return lastState;
 }
 
 async function getLastRefNumberForToday() {
-  if (!sheets) return 0;
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: `${CASES_TAB}!B:B`, // Col B: ref_id
-  });
-
-  const values = res.data.values || [];
-  const prefix = `REF-${todayYYMMDD()}-`;
+  const rows = await getAllRowsAtoH();
+  const prefix = `RP-${todayYYMMDD()}-`;
   let max = 0;
-
-  for (const row of values) {
-    const id = row?.[0] || "";
+  for (let i = 1; i < rows.length; i++) {
+    const id = rows[i]?.[1] || ""; // Col B ref
     if (id.startsWith(prefix)) {
       const n = parseInt(id.replace(prefix, ""), 10);
       if (!Number.isNaN(n)) max = Math.max(max, n);
@@ -146,61 +423,130 @@ async function getLastRefNumberForToday() {
   return max;
 }
 
-// ===== Crear referencia (antes "case") =====
 async function createReference({ wa_id, last_msg_type, receipt_media_id, receipt_is_payment }) {
   if (!sheets) {
-    const ref_id = `REF-${todayYYMMDD()}-000`;
-    return { ref_id, state: "EN_REVISION" };
+    const ref = `RP-${todayYYMMDD()}-000`;
+    return { ref, state: "EN_REVISION" };
   }
 
   const max = await getLastRefNumberForToday();
   const next = String(max + 1).padStart(3, "0");
-  const ref_id = `REF-${todayYYMMDD()}-${next}`;
+  const ref = `RP-${todayYYMMDD()}-${next}`;
 
   const created_at = new Date().toISOString();
   const state = "EN_REVISION";
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `${CASES_TAB}!A:I`,
+    range: `${CASES_TAB}!A:H`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [[
-        created_at,               // A created_at
-        ref_id,                  // B ref_id
-        wa_id,                   // C wa_id
-        state,                   // D state
-        last_msg_type,           // E last_msg_type
-        receipt_media_id || "",  // F receipt_media_id
+        created_at,                 // A created_at
+        ref,                        // B ref_id
+        wa_id,                      // C wa_id
+        state,                      // D state
+        last_msg_type,              // E last_msg_type
+        receipt_media_id || "",     // F receipt_media_id
         receipt_is_payment || "UNKNOWN", // G receipt_is_payment
-        "",                      // H notes
+        "",                         // H notes
       ]],
     },
   });
 
-  return { ref_id, state };
+  return { ref, state };
 }
 
-// ===== WhatsApp Send =====
-async function sendText(to, bodyText, ref_id = "") {
-  if (!WHATSAPP_TOKEN) {
-    console.warn("⚠️ WHATSAPP_TOKEN NO configurado");
-    return { ok: false, reason: "missing_whatsapp_token" };
+async function findRowByRef(refOrCase) {
+  const rows = await getAllRowsAtoH();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if ((row?.[1] || "") === refOrCase) {
+      return {
+        rowNumber: i + 1,
+        ref: row?.[1] || "",
+        wa_id: row?.[2] || "",
+        state: row?.[3] || "",
+        notes: row?.[7] || "",
+      };
+    }
   }
-  if (!PHONE_NUMBER_ID) {
-    console.warn("⚠️ PHONE_NUMBER_ID NO configurado");
-    return { ok: false, reason: "missing_phone_number_id" };
+  return null;
+}
+
+async function updateCell(rangeA1, value) {
+  if (!sheets) return;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${CASES_TAB}!${rangeA1}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[value]] },
+  });
+}
+
+/* ================= WHATSAPP SEND ================= */
+
+async function sendText(to, bodyText, ref_id = "") {
+  if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
+    console.warn("⚠️ Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID");
+    return { ok: false };
   }
 
-  const url = `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`;
+  const resp = await fetch(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body: bodyText },
+    }),
+  });
+
+  const raw = await resp.text();
+  console.log("📤 WhatsApp send status:", resp.status);
+  console.log("📤 WhatsApp send raw:", raw);
+
+  // OUT conversations
+  await saveConversation({ wa_id: to, direction: "OUT", message: bodyText, ref_id });
+
+  return { ok: resp.ok, status: resp.status, raw };
+}
+
+async function whatsappUploadImageBuffer(buffer, mimeType = "image/jpeg") {
+  if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) throw new Error("Faltan WHATSAPP_TOKEN o PHONE_NUMBER_ID");
+
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", buffer, { filename: "boleta.jpg", contentType: mimeType });
+
+  const resp = await fetch(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/media`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      ...form.getHeaders(),
+    },
+    body: form,
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(`Upload media fallo: ${resp.status} ${JSON.stringify(data)}`);
+  return data.id;
+}
+
+async function sendImageByMediaId(to, mediaId, caption = "") {
   const payload = {
     messaging_product: "whatsapp",
     to,
-    type: "text",
-    text: { body: bodyText },
+    type: "image",
+    image: { id: mediaId },
   };
+  if (caption) payload.image.caption = caption;
 
-  const resp = await fetch(url, {
+  const resp = await fetch(`https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${WHATSAPP_TOKEN}`,
@@ -210,39 +556,90 @@ async function sendText(to, bodyText, ref_id = "") {
   });
 
   const raw = await resp.text();
-  console.log("📤 WhatsApp send status:", resp.status);
-  console.log("📤 WhatsApp send raw:", raw);
+  console.log("📤 WhatsApp send image status:", resp.status);
+  console.log("📤 WhatsApp send image raw:", raw);
 
-  // Guardar conversación OUT
+  // OUT conversations (nota)
   await saveConversation({
     wa_id: to,
     direction: "OUT",
-    message: bodyText,
-    ref_id,
+    message: `[image sent] ${caption || ""}`.trim(),
+    ref_id: "",
   });
 
   return { ok: resp.ok, status: resp.status, raw };
 }
 
-// ===== OpenAI respuesta =====
-async function askOpenAI(userText, state = "BOT") {
-  if (!openai) return "⚠️ IA no configurada.";
+/* ================= OPENAI VISION: PUBLICIDAD vs COMPROBANTE ================= */
 
-  const systemPrompt = `
-Eres un asistente de WhatsApp para Rifas El Agropecuario.
-Responde corto, claro, en español colombiano, amigable y orientado a cerrar venta.
+async function fetchWhatsAppMediaUrl(mediaId) {
+  const resp = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!data?.url) throw new Error("No media url from Meta: " + JSON.stringify(data));
+  return data.url;
+}
+
+async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
+  const resp = await fetch(mediaUrl, { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } });
+  const arr = await resp.arrayBuffer();
+  return Buffer.from(arr);
+}
+
+function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
+  const b64 = buffer.toString("base64");
+  return `data:${mimeType};base64,${b64}`;
+}
+
+async function classifyPaymentImage({ mediaId }) {
+  if (!openai) return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
+
+  const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
+  const buf = await downloadWhatsAppMediaAsBuffer(mediaUrl);
+  const dataUrl = bufferToDataUrl(buf, "image/jpeg");
+
+  const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
 Reglas:
-- Si el usuario dice "gracias", responde con agradecimiento y cierra elegante.
-- No inventes datos.
-- Si el usuario pregunta precio, explica opciones en frases cortas.
-- Si el estado es EN_REVISION, recuerda que ya está en revisión.
-Estado actual del cliente: ${state}
-`.trim();
+- COMPROBANTE: recibo de transferencia/depósito, comprobante bancario, Nequi/Daviplata, confirmación de pago, voucher.
+- PUBLICIDAD: afiche/promoción, banner con premios, precios, números, logo invitando a comprar.
+Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
   const resp = await openai.responses.create({
     model: "gpt-4o-mini",
     input: [
-      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: prompt },
+          { type: "input_image", image_url: dataUrl },
+        ],
+      },
+    ],
+  });
+
+  const out = (resp.output_text || "").trim();
+  try {
+    const parsed = JSON.parse(out);
+    return {
+      label: (parsed.label || "DUDA").toUpperCase(),
+      confidence: Number(parsed.confidence ?? 0),
+      why: parsed.why || "",
+    };
+  } catch {
+    return { label: "DUDA", confidence: 0, why: "No JSON: " + out.slice(0, 120) };
+  }
+}
+
+/* ================= OPENAI TEXT (con prompt pro) ================= */
+
+async function askOpenAI(userText, state = "BOT") {
+  if (!openai) return "¿Te gustaría participar o conocer precios de boletas?";
+
+  const resp = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      { role: "system", content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}` },
       { role: "user", content: userText },
     ],
   });
@@ -250,42 +647,66 @@ Estado actual del cliente: ${state}
   return (resp.output_text || "").trim() || "¿Me repites, por favor?";
 }
 
-// ===== Routes =====
-app.get("/", (req, res) => res.send("OK - webhook vivo ✅"));
+/* ================= MONITOR APROBADOS ================= */
 
-// Test send
-app.get("/test-send", async (req, res) => {
-  const to = req.query.to;
-  if (!to) return res.status(400).send("Falta ?to=573xxxxxxxxx");
-  const result = await sendText(to, "✅ TEST desde /test-send");
-  return res.status(200).send(result);
-});
-
-// Test AI
-app.get("/test-ai", async (req, res) => {
-  const q = req.query.q || "hola";
-  const out = await askOpenAI(q, "BOT");
-  return res.json({ ok: true, q, out });
-});
-
-// Test sheet
-app.get("/test-sheet", async (req, res) => {
+async function monitorAprobados() {
   try {
-    if (!sheets) return res.status(500).send("Sheets NO configurado (revisa env vars)");
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: `${CONV_TAB}!A:E`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [[new Date().toISOString(), "TEST", "OUT", "TEST_OK", ""]] },
-    });
-    return res.status(200).send("OK: escribí en conversations ✅");
-  } catch (err) {
-    console.error("❌ Sheets error:", err?.response?.data || err);
-    return res.status(500).send("ERROR: revisa logs en Render");
-  }
-});
+    if (!sheets) return;
+    const rows = await getAllRowsAtoH();
 
-// ===== Meta verify =====
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const wa_id = row?.[2];
+      const state = row?.[3];
+      const notes = row?.[7];
+
+      if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
+        await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta. 🙌");
+        await updateCell(`H${i + 1}`, "NOTIFIED_APROBADO");
+      }
+    }
+  } catch (err) {
+    console.error("❌ monitorAprobados:", err);
+  }
+}
+
+/* ================= TELEGRAM HELPERS ================= */
+
+function extractRef(text = "") {
+  const m = String(text).match(/(RP|CASE)-[A-Za-z0-9-]+/i);
+  return m ? m[0].toUpperCase() : null;
+}
+
+async function telegramSendMessage(chat_id, text) {
+  if (!TELEGRAM_BOT_TOKEN) return;
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id, text }),
+  });
+}
+
+async function telegramGetFilePath(file_id) {
+  const r = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(file_id)}`
+  );
+  const j = await r.json();
+  if (!j.ok) throw new Error("getFile fallo: " + JSON.stringify(j));
+  return j.result.file_path;
+}
+
+async function telegramDownloadFileBuffer(file_path) {
+  const url = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file_path}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("download file fallo: " + r.status);
+  return await r.buffer();
+}
+
+/* ================= ROUTES ================= */
+
+app.get("/", (req, res) => res.send("OK ✅"));
+
+// Meta verify
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -295,104 +716,202 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// ===== WhatsApp webhook receive =====
+// Meta receive
 app.post("/webhook", async (req, res) => {
-  // Seguridad obligatoria
-  if (!verifyMetaSignature(req)) {
-    console.log("❌ Firma Meta inválida - bloqueado");
-    return res.sendStatus(403);
-  }
-
-  // Responder rápido
+  if (!verifyMetaSignature(req)) return res.sendStatus(403);
   res.sendStatus(200);
 
   try {
-    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
-    const msg = value?.messages?.[0];
-
-    console.log("📩 Evento recibido");
-    // console.log(JSON.stringify(req.body, null, 2)); // si quieres ver todo
-
-    if (!msg) return; // statuses u otros eventos
+    const msg = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (!msg) return;
 
     const wa_id = msg.from;
     const type = msg.type;
 
-    // ===== TEXT =====
+    // Si el cliente responde, cancelar recordatorio pendiente
+    if (followUps.has(wa_id)) {
+      clearTimeout(followUps.get(wa_id));
+      followUps.delete(wa_id);
+    }
+
+    // TEXT
     if (type === "text") {
-      const text = msg.text?.body || "";
-
-      // Guardar IN
-      await saveConversation({
-        wa_id,
-        direction: "IN",
-        message: text,
-      });
-
+      const text = (msg.text?.body || "").trim();
       const state = await getLatestStateByWaId(wa_id);
 
-      // Si está en revisión, mensaje corto
-      if (state === "EN_REVISION") {
-        await sendText(wa_id, "🕒 Tu comprobante ya está en revisión. Apenas sea aprobado te avisamos.", "");
-        return;
-      }
+      // IN conversations
+      await saveConversation({ wa_id, direction: "IN", message: text });
 
-      // Si dice gracias
+      // Gracias: responder humano según estado
       if (isThanks(text)) {
-        await sendText(wa_id, "¡Con gusto! 🙌 Gracias por tu compra. Si necesitas otra boleta, me dices y te ayudo.", "");
+        if (state === "BOLETA_ENVIADA") {
+          await sendText(wa_id, "🙏 ¡Gracias a ti por tu compra! Mucha suerte 🍀 Si necesitas algo más, aquí estoy.");
+          return;
+        }
+        if (state === "APROBADO") {
+          await sendText(wa_id, "🙏 ¡Con gusto! Tu pago ya está aprobado. En breve te enviamos tu boleta. 🙌");
+          return;
+        }
+        if (state === "EN_REVISION") {
+          await sendText(wa_id, "🙏 ¡Con gusto! Tu pago sigue en revisión. Apenas quede aprobado te aviso.");
+          return;
+        }
+        await sendText(wa_id, "🙏 ¡Con gusto! ¿Deseas participar en la rifa?");
         return;
       }
 
-      // IA normal
-      const aiReply = await askOpenAI(text, state);
-      await sendText(wa_id, aiReply, "");
-      return;
-    }
-
-    // ===== IMAGE / DOCUMENT =====
-    if (type === "image" || type === "document") {
-      // Guardar IN (nota)
-      await saveConversation({
-        wa_id,
-        direction: "IN",
-        message: `[${type}] recibido`,
-      });
-
-      const state = await getLatestStateByWaId(wa_id);
+      // EN_REVISION: mensaje fijo
       if (state === "EN_REVISION") {
-        await sendText(wa_id, "🕒 Ya tenemos tu comprobante en revisión. Si enviaste otro por error, no te preocupes.", "");
+        await sendText(wa_id, "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo.");
         return;
       }
 
-      const receipt_media_id =
-        type === "image" ? msg.image?.id :
-        type === "document" ? msg.document?.id :
-        "";
+      // ✅ Regla híbrida: ya pagué
+      if (isAlreadyPaidIntent(text)) {
+        await sendText(wa_id, paidInstructionMessage());
+        return;
+      }
 
-      // Aquí a futuro puedes hacer clasificación real (publicidad vs comprobante).
-      // Por ahora dejamos UNKNOWN para no frenar flujo.
-      const receipt_is_payment = "UNKNOWN";
+      // ✅ Regla híbrida: precios
+      if (isPricingIntent(text) || isBuyIntent(text)) {
+        const qty = tryExtractBoletasQty(text);
+        if (!qty) {
+          await sendText(wa_id, "✅ Claro. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 7, 10)");
+          return;
+        }
+        const breakdown = calcTotalCOPForBoletas(qty);
+        if (!breakdown) {
+          await sendText(wa_id, "¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)");
+          return;
+        }
+        await sendText(wa_id, pricingReplyMessage(qty, breakdown));
+        return;
+      }
 
-      const { ref_id } = await createReference({
-        wa_id,
-        last_msg_type: type,
-        receipt_media_id,
-        receipt_is_payment,
-      });
-
-      console.log("✅ Referencia creada:", { ref_id, wa_id, type, receipt_media_id });
-
-      await sendText(wa_id, `✅ Comprobante recibido. Referencia ${ref_id}. En revisión.`, ref_id);
+      // IA para lo demás
+      const aiReply = await askOpenAI(text, state);
+      await sendText(wa_id, aiReply);
       return;
     }
 
-    // Otros tipos
-    console.log("ℹ️ Tipo no manejado aún:", type);
+    // IMAGE (filtro publicidad vs comprobante)
+    if (type === "image") {
+      const mediaId = msg.image?.id;
+
+      // IN conversations
+      await saveConversation({ wa_id, direction: "IN", message: "[image] recibido" });
+
+      let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
+      try {
+        cls = await classifyPaymentImage({ mediaId });
+      } catch (e) {
+        console.warn("⚠️ Clasificación falló, continúo como DUDA:", e?.message || e);
+      }
+
+      console.log("🧠 Clasificación imagen:", cls);
+
+      if (cls.label === "PUBLICIDAD") {
+        await sendText(wa_id, "⚠️ Esa imagen parece publicidad. Por favor envíame el *comprobante de pago* (captura del recibo).");
+        return;
+      }
+
+      if (cls.label !== "COMPROBANTE") {
+        await sendText(wa_id, "👀 No logro confirmar si es un comprobante. Por favor envíame una captura clara del *recibo de pago*.");
+        return;
+      }
+
+      const { ref } = await createReference({
+        wa_id,
+        last_msg_type: "image",
+        receipt_media_id: mediaId,
+        receipt_is_payment: "YES",
+      });
+
+      await sendText(wa_id, `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago está en revisión.`, ref);
+      return;
+    }
+
+    // DOCUMENT: pedir imagen
+    if (type === "document") {
+      await saveConversation({ wa_id, direction: "IN", message: "[document] recibido" });
+      await sendText(wa_id, "📄 Recibí un documento. Por favor envíame el comprobante como *imagen/captura* para procesarlo más rápido.");
+      return;
+    }
+
   } catch (err) {
-    console.error("❌ Webhook processing error:", err);
+    console.error("❌ /webhook error:", err);
   }
 });
 
-// ===== Start =====
+// TELEGRAM WEBHOOK (SECRET OBLIGATORIO)
+app.post("/telegram-webhook", async (req, res) => {
+  try {
+    if (!TELEGRAM_SECRET_TOKEN) {
+      console.error("❌ TELEGRAM_SECRET_TOKEN no está configurado (obligatorio).");
+      return res.sendStatus(500);
+    }
+    const incoming = req.headers["x-telegram-bot-api-secret-token"];
+    if (incoming !== TELEGRAM_SECRET_TOKEN) {
+      return res.sendStatus(401);
+    }
+
+    res.sendStatus(200);
+
+    if (!TELEGRAM_BOT_TOKEN || !sheets) return;
+
+    const msg = req.body?.message;
+    if (!msg) return;
+
+    const chat_id = msg.chat?.id;
+
+    const photos = msg.photo;
+    const best = Array.isArray(photos) ? photos[photos.length - 1] : null;
+    const file_id = best?.file_id;
+
+    const caption = msg.caption || msg.text || "";
+    const ref = extractRef(caption);
+
+    if (!file_id) {
+      if (chat_id) await telegramSendMessage(chat_id, "⚠️ Debes enviar una *foto* de la boleta.");
+      return;
+    }
+    if (!ref) {
+      if (chat_id) await telegramSendMessage(chat_id, "⚠️ Falta la referencia en el caption. Ej: RP-240224-001");
+      return;
+    }
+
+    const found = await findRowByRef(ref);
+    if (!found) {
+      if (chat_id) await telegramSendMessage(chat_id, `❌ No encontré esa referencia en la hoja: ${ref}`);
+      return;
+    }
+
+    if (found.state !== "APROBADO" && found.state !== "BOLETA_ENVIADA") {
+      if (chat_id) await telegramSendMessage(chat_id, `⚠️ La referencia ${ref} está en estado: ${found.state}. Primero debe estar APROBADO.`);
+      return;
+    }
+
+    const file_path = await telegramGetFilePath(file_id);
+    const imgBuffer = await telegramDownloadFileBuffer(file_path);
+
+    const mediaId = await whatsappUploadImageBuffer(imgBuffer, "image/jpeg");
+    await sendImageByMediaId(found.wa_id, mediaId, `🎟️ Boleta enviada ✅ (${ref})`);
+
+    if (found.state !== "BOLETA_ENVIADA") {
+      await updateCell(`D${found.rowNumber}`, "BOLETA_ENVIADA");
+    }
+
+    if (chat_id) await telegramSendMessage(chat_id, `✅ Envié la boleta al cliente (${found.wa_id}) y marqué BOLETA_ENVIADA. (${ref})`);
+  } catch (err) {
+    console.error("❌ /telegram-webhook error:", err);
+  }
+});
+
+/* ================= START ================= */
+
+setInterval(monitorAprobados, 30000);
+
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+});
