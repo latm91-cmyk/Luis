@@ -942,23 +942,23 @@ app.post("/webhook", async (req, res) => {
       // Session persistente
       await touchSession(wa_id);
 
-      // Saludo UNA sola vez
-      const greeted = await hasGreeted(wa_id);
-      console.log("SESSION CHECK:", { wa_id, greeted })
+        // Saludo UNA sola vez
+const greeted = await hasGreeted(wa_id);
+console.log("SESSION CHECK:", { wa_id, greeted });
 
-      if (!greeted) {
-        await sendText(
-          wa_id,
-          `👋 Bienvenido a Rifas y Sorteos El Agropecuario!
+if (!greeted) {
+  await sendText(
+    wa_id,
+    `👋 Bienvenido a Rifas y Sorteos El Agropecuario!
 
 Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales.
 
-dime que informacion necesitas y con gusto te ayudo.`
-        );
+Dime qué información necesitas y con gusto te ayudo.`
+  );
 
-        await markGreeted(wa_id);
-        }
-
+  await markGreeted(wa_id);
+  return; // ✅ CLAVE: aquí se detiene para no enviar otro mensaje
+}
       const state = await getLatestStateByWaId(wa_id);
 
       // Gracias: responder humano según estado
@@ -1024,6 +1024,17 @@ dime que informacion necesitas y con gusto te ayudo.`
       });
 
       let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
+
+      // ✅ Saludo UNA sola vez (también si el primer mensaje fue imagen)
+const greeted = await hasGreeted(wa_id);
+if (!greeted) {
+  await sendText(
+    wa_id,
+    `👋 Bienvenido a Rifas y Sorteos El Agropecuario!\n\nInspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales.\n\ndime qué información necesitas y con gusto te ayudo.`
+  );
+  await markGreeted(wa_id);
+}
+// 👇 NO return aquí. Seguimos con la clasificación de la imagen.
 
       try {
         cls = await classifyPaymentImage({ mediaId });
