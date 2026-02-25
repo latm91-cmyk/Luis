@@ -747,21 +747,22 @@ async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
 
 function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
   const b64 = buffer.toString("base64");
-  return `data: ${ mimeType }; base64, ${ b64 } `;
+  return `data:${mimeType};base64,${b64}`;
 }
 
 async function classifyPaymentImage({ mediaId }) {
-  if (!openai) return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
+  if (!openai)
+    return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
 
   const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
   const { buf, mimeType } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
-const dataUrl = bufferToDataUrl(buf, mimeType);
+  const dataUrl = bufferToDataUrl(buf, mimeType);
 
   const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
-    Reglas:
-  - COMPROBANTE: recibo de transferencia / depósito, comprobante bancario, Nequi / Daviplata, confirmación de pago, voucher.
+Reglas:
+- COMPROBANTE: recibo de transferencia / depósito, comprobante bancario, Nequi / Daviplata, confirmación de pago, voucher.
 - PUBLICIDAD: afiche / promoción, banner con premios, precios, números, logo invitando a comprar.
-Devuelve SOLO JSON: { "label": "...", "confidence": 0 - 1, "why": "..." } `;
+Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
   const resp = await openai.responses.create({
     model: "gpt-4o-mini",
@@ -778,53 +779,45 @@ Devuelve SOLO JSON: { "label": "...", "confidence": 0 - 1, "why": "..." } `;
 
   const out = (resp.output_text || "").trim();
 
-try {
-  // intenta directo
-  const parsed = JSON.parse(out);
-const normalized = normalize(parsed);
+  try {
+    const parsed = JSON.parse(out);
+    const normalized = normalize(parsed);
 
-const result = {
-  ...normalized,
-  mimeType
-};
+    const result = { ...normalized, mimeType };
 
-console.log("🧠 Clasificación IA:", {
-  mediaId,
-  mimeType,
-  label: result.label,
-  confidence: result.confidence,
-  why: result.why
-});
+    console.log("🧠 Clasificación IA:", {
+      mediaId,
+      mimeType,
+      label: result.label,
+      confidence: result.confidence,
+      why: result.why,
+    });
 
-return result;
+    return result;
 
-} catch {
-  // intenta “rescatar” el primer objeto JSON dentro del texto
-  const m = out.match(/\{[\s\S]*\}/);
-  if (m) {
-     try {
-  const parsed = JSON.parse(m[0]);
-  const normalized = normalize(parsed);
+  } catch {
+    const m = out.match(/\{[\s\S]*\}/);
 
-  const result = {
-    ...normalized,
-    mimeType
-  };
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        const normalized = normalize(parsed);
 
-  console.log("🧠 Clasificación IA:", {
-    mediaId,
-    mimeType,
-    label: result.label,
-    confidence: result.confidence,
-    why: result.why
-  });
+        const result = { ...normalized, mimeType };
 
-  return result;
+        console.log("🧠 Clasificación IA (rescatado):", result);
 
-} catch {}
+        return result;
+
+      } catch {}
+    }
+
+    return {
+      label: "DUDA",
+      confidence: 0,
+      why: "No JSON: " + out.slice(0, 200),
+    };
   }
-
-  return { label: "DUDA", confidence: 0, why: "No JSON: " + out.slice(0, 200) };
 }
 
 function normalize(parsed) {
@@ -833,7 +826,6 @@ function normalize(parsed) {
     confidence: Number(parsed.confidence ?? 0),
     why: parsed.why || "",
   };
-
 }
 
 /* ================= OPENAI TEXT (con prompt pro) ================= */
