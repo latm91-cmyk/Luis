@@ -25,6 +25,7 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "rifas_verify_123";
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const CASES_TAB = process.env.GOOGLE_SHEET_TAB || "cases";
 const CONV_TAB = process.env.GOOGLE_SHEET_CONV_TAB || "conversations";
+const SESSIONS_TAB = process.env.GOOGLE_SHEET_SESS_TAB || "sessions";
 
 // Google auth
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
@@ -73,13 +74,16 @@ NO pidas datos sensibles (claves, códigos, tarjetas).
 Si el usuario dice que ya pagó o va a pagar: pide "envíame el comprobante (foto o PDF)" + datos.
 Si pregunta por estado del comprobante: responde que está en revisión y que se confirmará al aprobarse
 ________________________________________
-MENSAJE DE BIENVENIDA (EN UN SOLO PÁRRAFO)
-Envía exactamente este mensaje a nuevos clientes:
-Bienvenid@ a Rifas y sorteos El Agropecuario, Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales, combinando premios en efectivo y bienes agropecuarios de alto valor. no hay necesidad de que me envies captura de pantalla de la publicidad. ¿Quieres acceder a información sobre nuestros sorteos vigentes?, ¡vamos a ganar!
-________________________________________
+
 INFORMACIÓN DE PREMIOS (EN UN SOLO PÁRRAFO)
 Cuando el cliente pregunte por premios o metodología, responde en un solo párrafo con el siguiente texto:
-En la actual campaña tenemos Premio semanal: $500.000 pesos colombianos acumulables, Premio mayor: Lote de 5 novillas preñadas y un torete, avaluado en $18.000.000 de pesos, Segundo premio: $15.000.000 en efectivo, Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000, Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. Nuestros sorteos se realizan tomando como base los resultados oficiales de las loterías correspondientes, garantizando total transparencia. ¿Quieres conocer el precio de boletería y métodos de pago?, ¿quieres conocer las reglas del sorteo?
+En la actual campaña tenemos Premio semanal: $500.000 pesos colombianos acumulables, 
+Premio mayor: Lote de 5 novillas preñadas y un torete, avaluado en $18.000.000 de pesos, 
+Segundo premio: $15.000.000 en efectivo, 
+Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000, 
+Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. 
+Nuestros sorteos se realizan tomando como base los resultados oficiales de las loterías correspondientes, garantizando total transparencia. 
+¿Quieres conocer el precio de boletería y métodos de pago?, ¿quieres conocer las reglas del sorteo?
 ________________________________________
 REGLAS Y FECHAS DE SORTEO
 (Enviar cada premio en párrafo separado)
@@ -238,6 +242,95 @@ function isBuyIntent(text = "") {
 function isThanks(text = "") {
   const t = String(text).toLowerCase().trim();
   return /\b(gracias|muchas gracias|mil gracias|grac)\b/.test(t);
+}
+
+/* ================= SESSIONS (persistente en Sheets) ================= */
+
+async function getAllSessionsRowsAtoF() {
+  if (!sheets) return [];
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${SESSIONS_TAB}!A:F`,
+  });
+  return res.data.values || [];
+}
+
+async function getSessionByWaId(wa_id) {
+  const rows = await getAllSessionsRowsAtoF();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if ((row?.[1] || "") === wa_id) {
+      return {
+        rowNumber: i + 1,
+        created_at: row?.[0] || "",
+        wa_id: row?.[1] || "",
+        greeted: String(row?.[2] || "").toUpperCase() === "TRUE",
+        greeted_at: row?.[3] || "",
+        last_seen: row?.[4] || "",
+        notes: row?.[5] || "",
+      };
+    }
+  }
+  return null;
+}
+
+async function upsertSession({ wa_id, greeted = false, notes = "" }) {
+  if (!sheets) return;
+
+  const now = new Date().toISOString();
+  const existing = await getSessionByWaId(wa_id);
+
+  if (!existing) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: `${SESSIONS_TAB}!A:F`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[
+          now,                // A created_at
+          wa_id,              // B wa_id
+          greeted ? "TRUE" : "FALSE", // C greeted
+          greeted ? now : "", // D greeted_at
+          now,                // E last_seen
+          notes || "",        // F notes
+        ]],
+      },
+    });
+    return;
+  }
+
+  // update row existente: C greeted, D greeted_at (si aplica), E last_seen, F notes
+  const rowNum = existing.rowNumber;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${SESSIONS_TAB}!E${rowNum}:F${rowNum}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[now, notes || existing.notes || ""]] },
+  });
+
+  // Si vamos a marcar greeted TRUE y aún estaba FALSE
+  if (greeted && !existing.greeted) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${SESSIONS_TAB}!C${rowNum}:D${rowNum}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [["TRUE", now]] },
+    });
+  }
+}
+
+async function hasGreeted(wa_id) {
+  const s = await getSessionByWaId(wa_id);
+  return !!s?.greeted;
+}
+
+async function markGreeted(wa_id) {
+  await upsertSession({ wa_id, greeted: true });
+}
+
+async function touchSession(wa_id) {
+  await upsertSession({ wa_id, greeted: false });
 }
 
 /* ================= HYBRID RULES (DEL HÍBRIDO) ================= */
@@ -735,10 +828,34 @@ app.post("/webhook", async (req, res) => {
     }
 
     // TEXT
-    if (type === "text") {
-      const text = (msg.text?.body || "").trim();
-      const state = await getLatestStateByWaId(wa_id);
+   if (type === "text") {
+  const text = (msg.text?.body || "").trim();
 
+  // IN conversations (UNA sola vez)
+  await saveConversation({ wa_id, direction: "IN", message: text });
+
+  // Session persistente
+  await touchSession(wa_id);
+
+  // Saludo UNA sola vez
+  const greeted = await hasGreeted(wa_id);
+  if (!greeted) {
+    await sendText(
+      wa_id,
+      `👋 Bienvenido a Rifas y Sorteos El Agropecuario!
+
+Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales.
+
+¿Quieres acceder a información sobre nuestros sorteos vigentes?`
+    );
+
+    await markGreeted(wa_id);
+    return;
+  }
+
+  const state = await getLatestStateByWaId(wa_id);
+
+  
       // IN conversations
       await saveConversation({ wa_id, direction: "IN", message: text });
 
