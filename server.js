@@ -722,6 +722,7 @@ async function fetchWhatsAppMediaUrl(mediaId) {
   const resp = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
     headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
   });
+
   const data = await resp.json().catch(() => ({}));
   if (!data?.url) throw new Error("No media url from Meta: " + JSON.stringify(data));
   return data.url;
@@ -730,11 +731,13 @@ async function fetchWhatsAppMediaUrl(mediaId) {
 async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
   const r = await axios.get(mediaUrl, {
     responseType: "arraybuffer",
-    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
   });
 
   const mimeType =
-    (r.headers?.["content-type"] || r.headers?.["Content-Type"] || "").split(";")[0].trim();
+    (r.headers?.["content-type"] || r.headers?.["Content-Type"] || "")
+      .split(";")[0]
+      .trim();
 
   return {
     buf: Buffer.from(r.data),
@@ -744,7 +747,7 @@ async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
 
 function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
   const b64 = buffer.toString("base64");
-  return `data:${mimeType};base64,${b64}`;
+  return `data: ${ mimeType }; base64, ${ b64 } `;
 }
 
 async function classifyPaymentImage({ mediaId }) {
@@ -755,10 +758,10 @@ async function classifyPaymentImage({ mediaId }) {
 const dataUrl = bufferToDataUrl(buf, mimeType);
 
   const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
-Reglas:
-- COMPROBANTE: recibo de transferencia/depósito, comprobante bancario, Nequi/Daviplata, confirmación de pago, voucher.
-- PUBLICIDAD: afiche/promoción, banner con premios, precios, números, logo invitando a comprar.
-Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
+    Reglas:
+  - COMPROBANTE: recibo de transferencia / depósito, comprobante bancario, Nequi / Daviplata, confirmación de pago, voucher.
+- PUBLICIDAD: afiche / promoción, banner con premios, precios, números, logo invitando a comprar.
+Devuelve SOLO JSON: { "label": "...", "confidence": 0 - 1, "why": "..." } `;
 
   const resp = await openai.responses.create({
     model: "gpt-4o-mini",
@@ -841,7 +844,7 @@ async function askOpenAI(userText, state = "BOT") {
   const resp = await openai.responses.create({
     model: "gpt-4o-mini",
     input: [
-      { role: "system", content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}` },
+      { role: "system", content: `${ SYSTEM_PROMPT } \n\nEstado actual del cliente: ${ state } ` },
       { role: "user", content: userText },
     ],
   });
@@ -864,7 +867,7 @@ async function monitorAprobados() {
 
       if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
         await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta. 🙌");
-        await updateCell(`H${i + 1}`, "NOTIFIED_APROBADO");
+        await updateCell(`H${ i + 1 } `, "NOTIFIED_APROBADO");
       }
     }
   } catch (err) {
@@ -882,9 +885,9 @@ function extractRef(text = "") {
 async function telegramSendMessage(chat_id, text) {
   if (!TELEGRAM_BOT_TOKEN) return;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
+  method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id, text }),
+  body: JSON.stringify({ chat_id, text }),
   });
 }
 
@@ -937,34 +940,34 @@ app.post("/webhook", async (req, res) => {
     }
 
     // TEXT
-   if (type === "text") {
-  const text = (msg.text?.body || "").trim();
+    if (type === "text") {
+      const text = (msg.text?.body || "").trim();
 
-  // IN conversations (UNA sola vez)
-  await saveConversation({ wa_id, direction: "IN", message: text });
+      // IN conversations (UNA sola vez)
+      await saveConversation({ wa_id, direction: "IN", message: text });
 
-  // Session persistente
-  await touchSession(wa_id);
+      // Session persistente
+      await touchSession(wa_id);
 
-  // Saludo UNA sola vez
-  const greeted = await hasGreeted(wa_id);
-  console.long("SESSION CHECK:", { wa_id, greeted })
+      // Saludo UNA sola vez
+      const greeted = await hasGreeted(wa_id);
+      console.long("SESSION CHECK:", { wa_id, greeted })
 
-  if (!greeted) {
-    await sendText(
-      wa_id,
-      `👋 Bienvenido a Rifas y Sorteos El Agropecuario!
+      if (!greeted) {
+        await sendText(
+          wa_id,
+          `👋 Bienvenido a Rifas y Sorteos El Agropecuario!
 
 Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales.
 
 dime que informacion necesitas y con gusto te ayudo.`
-    );
+        );
 
-    await markGreeted(wa_id);
-    return;
-  }
+        await markGreeted(wa_id);
+        return;
+      }
 
-  const state = await getLatestStateByWaId(wa_id);
+      const state = await getLatestStateByWaId(wa_id);
 
       // Gracias: responder humano según estado
       if (isThanks(text)) {
@@ -1020,42 +1023,42 @@ dime que informacion necesitas y con gusto te ayudo.`
 
     // IMAGE (filtro publicidad vs comprobante)
     if (type === "image") {
-  const mediaId = msg.image?.id;
+      const mediaId = msg.image?.id;
 
-  await saveConversation({
-    wa_id,
-    direction: "IN",
-    message: "[imagen] recibida"
-  });
+      await saveConversation({
+        wa_id,
+        direction: "IN",
+        message: "[imagen] recibida"
+      });
 
-  let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
+      let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
 
-  try {
-    cls = await classifyPaymentImage({ mediaId });
-  } catch (e) {
-    console.warn("⚠ Clasificación falló, continúo como DUDA:", e?.message || e);
-  }
+      try {
+        cls = await classifyPaymentImage({ mediaId });
+      } catch (e) {
+        console.warn("⚠ Clasificación falló, continúo como DUDA:", e?.message || e);
+      }
 
-  setLastImageLabel(wa_id, cls.label);
-  console.log("🧠 Clasificación imagen:", cls);
+      setLastImageLabel(wa_id, cls.label);
+      console.log("🧠 Clasificación imagen:", cls);
 
-  // 👇 AQUÍ van los IF
-  if (cls.label === "PUBLICIDAD") {
-    await sendText(wa_id,
-      "📢 Esa imagen parece publicidad.\n\nSi quieres confirmar si es oficial, dime dónde la viste (Facebook, Instagram, etc.) y te confirmo."
-    );
-    return;
-  }
+      // 👇 AQUÍ van los IF
+      if (cls.label === "PUBLICIDAD") {
+        await sendText(wa_id,
+          "📢 Esa imagen parece publicidad.\n\nSi quieres confirmar si es oficial, dime dónde la viste (Facebook, Instagram, etc.) y te confirmo."
+        );
+        return;
+      }
 
-  if (cls.label !== "COMPROBANTE") {
-    await sendText(wa_id,
-      "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
-    );
-    return;
-  }
+      if (cls.label !== "COMPROBANTE") {
+        await sendText(wa_id,
+          "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
+        );
+        return;
+      }
 
-  // ✅ Aquí crear referencia si es comprobante
-   const { ref } = await createReference({
+      // ✅ Aquí crear referencia si es comprobante
+      const { ref } = await createReference({
         wa_id,
         last_msg_type: "image",
         receipt_media_id: mediaId,
