@@ -312,7 +312,7 @@ async function getSessionByWaId(wa_id) {
   const rows = await getAllSessionsRowsAtoF();
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if ((row?.[1] || "") === wa_id) {
+    if (String(row?.[1] || "").trim() === String(wa_id || "").trim()) {
       return {
         rowNumber: i + 1,
         created_at: row?.[0] || "",
@@ -337,11 +337,11 @@ async function upsertSession({ wa_id, greeted = false, notes = "" }) {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
       range: `${SESSIONS_TAB}!A:F`,
-      valueInputOption: "USER_ENTERED",
+      valueInputOption: "RAW",
       requestBody: {
         values: [[
           now,                // A created_at
-          wa_id,              // B wa_id
+          String(wa_id),              // B wa_id
           greeted ? "TRUE" : "FALSE", // C greeted
           greeted ? now : "", // D greeted_at
           now,                // E last_seen
@@ -902,6 +902,8 @@ app.post("/webhook", async (req, res) => {
 
   // Saludo UNA sola vez
   const greeted = await hasGreeted(wa_id);
+  console.long("SESSION CHECK:", { wa_id, greeted })
+  
   if (!greeted) {
     await sendText(
       wa_id,
@@ -917,10 +919,6 @@ dime que informacion necesitas y con gusto te ayudo.`
   }
 
   const state = await getLatestStateByWaId(wa_id);
-
-  
-      // IN conversations
-      await saveConversation({ wa_id, direction: "IN", message: text });
 
       // Gracias: responder humano según estado
       if (isThanks(text)) {
