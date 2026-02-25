@@ -1006,116 +1006,116 @@ app.post("/webhook", async (req, res) => {
     // TEXT
     // =========
     if (type === "text") {
-      const text = (msg.text?.body || "").trim();
-      const lastLabel = getLastImageLabel(wa_id);
+  const text = (msg.text?.body || "").trim();
+  const lastLabel = getLastImageLabel(wa_id);
 
-if (lastLabel === "PUBLICIDAD") {
+  // Si venimos de una imagen PUBLICIDAD, resolver esa conversación primero
+  if (lastLabel === "PUBLICIDAD") {
+    const t = text.toLowerCase();
 
-  const t = text.toLowerCase();
+    if (t.includes("facebook")) {
+      const reply = await withGreeting(
+        wa_id,
+        "📌 Si la viste en nuestra página oficial de Facebook 'Rifas y Sorteos El Agropecuario', sí es publicidad oficial.\n\nSi tienes el enlace, envíamelo y te confirmo."
+      );
+      await sendText(wa_id, reply);
 
-  if (t.includes("facebook")) {
-    await sendText(
+      // limpiar “contexto” para que no repita en próximos mensajes
+      setLastImageLabel(wa_id, null);
+      return;
+    }
+
+    if (
+      t.includes("es publicidad") ||
+      t.includes("si es publicidad") ||
+      t.includes("es de ustedes") ||
+      t.includes("de ustedes")
+    ) {
+      const reply = await withGreeting(
+        wa_id,
+        "✅ Sí, es una pieza publicitaria del sorteo actual. ¿Te gustaría participar?"
+      );
+      await sendText(wa_id, reply);
+
+      setLastImageLabel(wa_id, null);
+      return;
+    }
+    // Si no respondió algo útil, seguimos al flujo normal (no return)
+  }
+
+  await saveConversation({ wa_id, direction: "IN", message: text });
+
+  const state = await getLatestStateByWaId(wa_id);
+
+  // Gracias: responder humano según estado
+  if (isThanks(text)) {
+    let base = "🙏 ¡Con gusto! ¿Deseas participar en la rifa?";
+
+    if (state === "BOLETA_ENVIADA") {
+      base = "🙏 ¡Gracias a ti por tu compra! Mucha suerte 🍀 Si necesitas algo más, aquí estoy.";
+    } else if (state === "APROBADO") {
+      base = "🙏 ¡Con gusto! Tu pago ya está aprobado. En breve te enviamos tu boleta. 🙌";
+    } else if (state === "EN_REVISION") {
+      base = "🙏 ¡Con gusto! Tu pago sigue en revisión. Apenas quede aprobado te aviso.";
+    }
+
+    const reply = await withGreeting(wa_id, base);
+    await sendText(wa_id, reply);
+    return;
+  }
+
+  // EN_REVISION: mensaje fijo
+  if (state === "EN_REVISION") {
+    const reply = await withGreeting(
       wa_id,
-      "📌 Si la viste en nuestra página oficial de Facebook 'Rifas y Sorteos El Agropecuario', sí es publicidad oficial.\n\nSi tienes el enlace, envíamelo y te confirmo."
+      "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
     );
+    await sendText(wa_id, reply);
     return;
   }
 
-  if (
-    t.includes("es publicidad") ||
-    t.includes("si es publicidad") ||
-    t.includes("es de ustedes") ||
-    t.includes("de ustedes")
-  ) {
-    await sendText(
-      wa_id,
-      "✅ Sí, es una pieza publicitaria del sorteo actual. ¿Te gustaría participar?"
-    );
-    return;
-  }
-}
-
-  if (text.toLowerCase().includes("facebook")) {
-    await sendText(wa_id,
-      "📌 Si la viste en nuestra página oficial de Facebook 'Rifas y Sorteos El Agropecuario', sí es publicidad oficial.\n\nSi tienes el enlace, envíamelo y te confirmo."
-    );
+  // ✅ Regla híbrida: ya pagué
+  if (isAlreadyPaidIntent(text)) {
+    const reply = await withGreeting(wa_id, paidInstructionMessage());
+    await sendText(wa_id, reply);
     return;
   }
 
-  if (text.toLowerCase().includes("es publicidad")) {
-    await sendText(wa_id,
-      "Sí, es una pieza publicitaria del sorteo actual. ¿Te gustaría participar?"
-    );
-    return;
-  }
-}
-
-      await saveConversation({ wa_id, direction: "IN", message: text });
-
-      const state = await getLatestStateByWaId(wa_id);
-
-      // Gracias: responder humano según estado
-      if (isThanks(text)) {
-        let base =
-          "🙏 ¡Con gusto! ¿Deseas participar en la rifa?";
-
-        if (state === "BOLETA_ENVIADA") {
-          base = "🙏 ¡Gracias a ti por tu compra! Mucha suerte 🍀 Si necesitas algo más, aquí estoy.";
-        } else if (state === "APROBADO") {
-          base = "🙏 ¡Con gusto! Tu pago ya está aprobado. En breve te enviamos tu boleta. 🙌";
-        } else if (state === "EN_REVISION") {
-          base = "🙏 ¡Con gusto! Tu pago sigue en revisión. Apenas quede aprobado te aviso.";
-        }
-
-        const reply = await withGreeting(wa_id, base);
-        await sendText(wa_id, reply);
-        return;
-      }
-
-      // EN_REVISION: mensaje fijo
-      if (state === "EN_REVISION") {
-        const reply = await withGreeting(wa_id, "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo.");
-        await sendText(wa_id, reply);
-        return;
-      }
-
-      // ✅ Regla híbrida: ya pagué
-      if (isAlreadyPaidIntent(text)) {
-        const reply = await withGreeting(wa_id, paidInstructionMessage());
-        await sendText(wa_id, reply);
-        return;
-      }
-
-      // ✅ Regla híbrida: precios
-      if (isPricingIntent(text) || isBuyIntent(text)) {
-        const qty = tryExtractBoletasQty(text);
-        if (!qty) {
-          const reply = await withGreeting(wa_id, "✅ Claro. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 7, 10)");
-          await sendText(wa_id, reply);
-          return;
-        }
-
-        const breakdown = calcTotalCOPForBoletas(qty);
-        if (!breakdown) {
-          const reply = await withGreeting(wa_id, "¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)");
-          await sendText(wa_id, reply);
-          return;
-        }
-
-        const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
-        await sendText(wa_id, reply);
-        return;
-      }
-
-      // IA para lo demás
-      const aiReplyRaw = await askOpenAI(text, state);
-      const aiReply = humanizeIfJson(aiReplyRaw);
-
-      const reply = await withGreeting(wa_id, aiReply);
+  // ✅ Regla híbrida: precios / comprar
+  if (isPricingIntent(text) || isBuyIntent(text)) {
+    const qty = tryExtractBoletasQty(text);
+    if (!qty) {
+      const reply = await withGreeting(
+        wa_id,
+        "✅ Claro. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 7, 10)"
+      );
       await sendText(wa_id, reply);
       return;
     }
 
+    const breakdown = calcTotalCOPForBoletas(qty);
+    if (!breakdown) {
+      const reply = await withGreeting(
+        wa_id,
+        "¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)"
+      );
+      await sendText(wa_id, reply);
+      return;
+    }
+
+    const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
+    await sendText(wa_id, reply);
+    return;
+  }
+
+  // IA para lo demás
+  const aiReplyRaw = await askOpenAI(text, state);
+  const aiReply = humanizeIfJson(aiReplyRaw);
+
+  const reply = await withGreeting(wa_id, aiReply);
+  await sendText(wa_id, reply);
+  return;
+}
     // =========================
     // IMAGE (filtro publicidad vs comprobante)
     // =========================
