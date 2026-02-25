@@ -919,6 +919,37 @@ app.post("/webhook", async (req, res) => {
   if (!verifyMetaSignature(req)) return res.sendStatus(403);
   res.sendStatus(200);
 
+  // Helper: si NO ha saludado, pega saludo + respuesta en UN solo mensaje
+  async function withGreeting(wa_id, replyText) {
+    const greeted = await hasGreeted(wa_id);
+    if (!greeted) {
+      await markGreeted(wa_id);
+      return `👋 Bienvenido a Rifas y Sorteos El Agropecuario!\n\n${replyText}`;
+    }
+    return replyText;
+  }
+
+  // Helper: si por error la IA devuelve JSON, lo convertimos a texto humano
+  function humanizeIfJson(text) {
+    const t = String(text || "").trim();
+    if (!t) return t;
+
+    // Detecta JSON tipo {"label":"PUBLICIDAD",...}
+    if (t.startsWith("{") && t.endsWith("}")) {
+      try {
+        const obj = JSON.parse(t);
+        if (obj?.label) {
+          const label = String(obj.label).toUpperCase();
+          if (label === "PUBLICIDAD") return "📢 Esa imagen parece publicidad.";
+          if (label === "COMPROBANTE") return "✅ Ese archivo parece un comprobante.";
+          if (label === "OTRO") return "👀 Ese archivo no parece un comprobante.";
+          return "👀 No logro confirmar si es comprobante. ¿Me envías una captura más clara?";
+        }
+      } catch {}
+    }
+    return t;
+  }
+
   try {
     const msg = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!msg) return;
@@ -932,62 +963,84 @@ app.post("/webhook", async (req, res) => {
       followUps.delete(wa_id);
     }
 
+    // Siempre tocar sesión al recibir algo (para que greeted/state no se descoordinen)
+    await touchSession(wa_id);
+
+    // =========================
+    // AUDIO (nota de voz / audio)
+    // =========================
+    if (type === "audio") {
+      const mediaId = msg.audio?.id;
+
+      await saveConversation({ wa_id, direction: "IN", message: "[audio] recibido" });
+
+      if (!mediaId) {
+        const reply = await withGreeting(
+          wa_id,
+          "🎤 Recibí tu audio, pero no pude leerlo. Intenta enviarlo otra vez."
+        );
+        await sendText(wa_id, reply);
+        return;
+      }
+
+      try {
+        const text = await transcribeWhatsAppAudio(mediaId);
+        const state = await getLatestStateByWaId(wa_id);
+        const aiReplyRaw = await askOpenAI(text, state);
+        const aiReply = humanizeIfJson(aiReplyRaw);
+
+        const reply = await withGreeting(wa_id, aiReply);
+        await sendText(wa_id, reply);
+      } catch (e) {
+        console.warn("Audio transcripción falló:", e?.message || e);
+        const reply = await withGreeting(
+          wa_id,
+          "🎤 Recibí tu audio, pero no pude entenderlo. ¿Me lo escribes por texto, por favor?"
+        );
+        await sendText(wa_id, reply);
+      }
+      return;
+    }
+
+    // =========
     // TEXT
+    // =========
     if (type === "text") {
       const text = (msg.text?.body || "").trim();
 
-      // IN conversations (UNA sola vez)
       await saveConversation({ wa_id, direction: "IN", message: text });
 
-      // Session persistente
-      await touchSession(wa_id);
-
-        // Saludo UNA sola vez
-const greeted = await hasGreeted(wa_id);
-console.log("SESSION CHECK:", { wa_id, greeted });
-
-if (!greeted) {
-  await sendText(
-    wa_id,
-    `👋 Bienvenido a Rifas y Sorteos El Agropecuario!
-
-Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales.
-
-Dime qué información necesitas y con gusto te ayudo.`
-  );
-
-  await markGreeted(wa_id);
-  return; // ✅ CLAVE: aquí se detiene para no enviar otro mensaje
-}
       const state = await getLatestStateByWaId(wa_id);
 
       // Gracias: responder humano según estado
       if (isThanks(text)) {
+        let base =
+          "🙏 ¡Con gusto! ¿Deseas participar en la rifa?";
+
         if (state === "BOLETA_ENVIADA") {
-          await sendText(wa_id, "🙏 ¡Gracias a ti por tu compra! Mucha suerte 🍀 Si necesitas algo más, aquí estoy.");
-          return;
+          base = "🙏 ¡Gracias a ti por tu compra! Mucha suerte 🍀 Si necesitas algo más, aquí estoy.";
+        } else if (state === "APROBADO") {
+          base = "🙏 ¡Con gusto! Tu pago ya está aprobado. En breve te enviamos tu boleta. 🙌";
+        } else if (state === "EN_REVISION") {
+          base = "🙏 ¡Con gusto! Tu pago sigue en revisión. Apenas quede aprobado te aviso.";
         }
-        if (state === "APROBADO") {
-          await sendText(wa_id, "🙏 ¡Con gusto! Tu pago ya está aprobado. En breve te enviamos tu boleta. 🙌");
-          return;
-        }
-        if (state === "EN_REVISION") {
-          await sendText(wa_id, "🙏 ¡Con gusto! Tu pago sigue en revisión. Apenas quede aprobado te aviso.");
-          return;
-        }
-        await sendText(wa_id, "🙏 ¡Con gusto! ¿Deseas participar en la rifa?");
+
+        const reply = await withGreeting(wa_id, base);
+        await sendText(wa_id, reply);
         return;
       }
 
       // EN_REVISION: mensaje fijo
       if (state === "EN_REVISION") {
-        await sendText(wa_id, "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo.");
+        const reply = await withGreeting(wa_id, "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo.");
+        await sendText(wa_id, reply);
         return;
       }
 
       // ✅ Regla híbrida: ya pagué
       if (isAlreadyPaidIntent(text)) {
-        await sendText(wa_id, paidInstructionMessage());
+        const reply = await withGreeting(wa_id, paidInstructionMessage());
+        await sendText(wa_id, reply);
         return;
       }
 
@@ -995,46 +1048,41 @@ Dime qué información necesitas y con gusto te ayudo.`
       if (isPricingIntent(text) || isBuyIntent(text)) {
         const qty = tryExtractBoletasQty(text);
         if (!qty) {
-          await sendText(wa_id, "✅ Claro. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 7, 10)");
+          const reply = await withGreeting(wa_id, "✅ Claro. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 7, 10)");
+          await sendText(wa_id, reply);
           return;
         }
+
         const breakdown = calcTotalCOPForBoletas(qty);
         if (!breakdown) {
-          await sendText(wa_id, "¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)");
+          const reply = await withGreeting(wa_id, "¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)");
+          await sendText(wa_id, reply);
           return;
         }
-        await sendText(wa_id, pricingReplyMessage(qty, breakdown));
+
+        const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
+        await sendText(wa_id, reply);
         return;
       }
 
       // IA para lo demás
-      const aiReply = await askOpenAI(text, state);
-      await sendText(wa_id, aiReply);
+      const aiReplyRaw = await askOpenAI(text, state);
+      const aiReply = humanizeIfJson(aiReplyRaw);
+
+      const reply = await withGreeting(wa_id, aiReply);
+      await sendText(wa_id, reply);
       return;
     }
 
+    // =========================
     // IMAGE (filtro publicidad vs comprobante)
+    // =========================
     if (type === "image") {
       const mediaId = msg.image?.id;
 
-      await saveConversation({
-        wa_id,
-        direction: "IN",
-        message: "[imagen] recibida"
-      });
+      await saveConversation({ wa_id, direction: "IN", message: "[imagen] recibida" });
 
       let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
-
-      // ✅ Saludo UNA sola vez (también si el primer mensaje fue imagen)
-const greeted = await hasGreeted(wa_id);
-if (!greeted) {
-  await sendText(
-    wa_id,
-    `👋 Bienvenido a Rifas y Sorteos El Agropecuario!\n\nInspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales.\n\ndime qué información necesitas y con gusto te ayudo.`
-  );
-  await markGreeted(wa_id);
-}
-// 👇 NO return aquí. Seguimos con la clasificación de la imagen.
 
       try {
         cls = await classifyPaymentImage({ mediaId });
@@ -1045,18 +1093,21 @@ if (!greeted) {
       setLastImageLabel(wa_id, cls.label);
       console.log("🧠 Clasificación imagen:", cls);
 
-      // 👇 AQUÍ van los IF
       if (cls.label === "PUBLICIDAD") {
-        await sendText(wa_id,
+        const reply = await withGreeting(
+          wa_id,
           "📢 Esa imagen parece publicidad.\n\nSi quieres confirmar si es oficial, dime dónde la viste (Facebook, Instagram, etc.) y te confirmo."
         );
+        await sendText(wa_id, reply);
         return;
       }
 
       if (cls.label !== "COMPROBANTE") {
-        await sendText(wa_id,
+        const reply = await withGreeting(
+          wa_id,
           "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
         );
+        await sendText(wa_id, reply);
         return;
       }
 
@@ -1068,17 +1119,35 @@ if (!greeted) {
         receipt_is_payment: "YES",
       });
 
-      await sendText(wa_id, `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago está en revisión.`, ref);
+      const reply = await withGreeting(
+        wa_id,
+        `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago está en revisión.`
+      );
+      await sendText(wa_id, reply, ref);
       return;
     }
 
+    // =========================
     // DOCUMENT: pedir imagen
+    // =========================
     if (type === "document") {
       await saveConversation({ wa_id, direction: "IN", message: "[document] recibido" });
-      await sendText(wa_id, "📄 Recibí un documento. Por favor envíame el comprobante como *imagen/captura* para procesarlo más rápido.");
+
+      const reply = await withGreeting(
+        wa_id,
+        "📄 Recibí un documento. Por favor envíame el comprobante como *imagen/captura* para procesarlo más rápido."
+      );
+      await sendText(wa_id, reply);
       return;
     }
 
+    // Otros tipos (sticker, video, etc.)
+    await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
+    const reply = await withGreeting(
+      wa_id,
+      "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
+    );
+    await sendText(wa_id, reply);
   } catch (err) {
     console.error("❌ /webhook error:", err);
   }
