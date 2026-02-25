@@ -957,8 +957,7 @@ dime que informacion necesitas y con gusto te ayudo.`
         );
 
         await markGreeted(wa_id);
-        return;
-      }
+        }
 
       const state = await getLatestStateByWaId(wa_id);
 
