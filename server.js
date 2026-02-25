@@ -1007,6 +1007,48 @@ app.post("/webhook", async (req, res) => {
     // =========
     if (type === "text") {
       const text = (msg.text?.body || "").trim();
+      const lastLabel = getLastImageLabel(wa_id);
+
+if (lastLabel === "PUBLICIDAD") {
+
+  const t = text.toLowerCase();
+
+  if (t.includes("facebook")) {
+    await sendText(
+      wa_id,
+      "📌 Si la viste en nuestra página oficial de Facebook 'Rifas y Sorteos El Agropecuario', sí es publicidad oficial.\n\nSi tienes el enlace, envíamelo y te confirmo."
+    );
+    return;
+  }
+
+  if (
+    t.includes("es publicidad") ||
+    t.includes("si es publicidad") ||
+    t.includes("es de ustedes") ||
+    t.includes("de ustedes")
+  ) {
+    await sendText(
+      wa_id,
+      "✅ Sí, es una pieza publicitaria del sorteo actual. ¿Te gustaría participar?"
+    );
+    return;
+  }
+}
+
+  if (text.toLowerCase().includes("facebook")) {
+    await sendText(wa_id,
+      "📌 Si la viste en nuestra página oficial de Facebook 'Rifas y Sorteos El Agropecuario', sí es publicidad oficial.\n\nSi tienes el enlace, envíamelo y te confirmo."
+    );
+    return;
+  }
+
+  if (text.toLowerCase().includes("es publicidad")) {
+    await sendText(wa_id,
+      "Sí, es una pieza publicitaria del sorteo actual. ¿Te gustaría participar?"
+    );
+    return;
+  }
+}
 
       await saveConversation({ wa_id, direction: "IN", message: text });
 
