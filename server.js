@@ -212,6 +212,19 @@ https://www.youtube.com/shorts/pZyA9f1Fdr0?feature=share
 
 Influencer aliado Juancho:
 https://www.facebook.com/share/v/1CCcqyKymt/, sin embargo el unico canal oficial de ventas es por este medio y solo al presente numero de WhatsApp
+
+_____________________________________
+COMPROBANTE
+Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
+
+COMPROBANTE: incluye "Envío realizado", transferencias Nequi/Daviplata/PSE, recibos con QR de verificación, valor, fecha, referencia, destinatario.
+PUBLICIDAD: afiches/promos.
+OTRO: cualquier otra cosa.
+DUDA: si está cortado/borroso.
+
+Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}
+
+____________________________________________
 OTRAS ESPECIFICACIONES: 
 Horario de atención: lunes a domingo 8:30 am a 7:30 pm.
 `.trim();
@@ -752,16 +765,26 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
   });
 
   const out = (resp.output_text || "").trim();
-  try {
-    const parsed = JSON.parse(out);
-    return {
-      label: (parsed.label || "DUDA").toUpperCase(),
-      confidence: Number(parsed.confidence ?? 0),
-      why: parsed.why || "",
-    };
-  } catch {
-    return { label: "DUDA", confidence: 0, why: "No JSON: " + out.slice(0, 120) };
+
+try {
+  // intenta directo
+  return normalize(JSON.parse(out));
+} catch {
+  // intenta “rescatar” el primer objeto JSON dentro del texto
+  const m = out.match(/\{[\s\S]*\}/);
+  if (m) {
+    try { return normalize(JSON.parse(m[0])); } catch {}
   }
+  return { label: "DUDA", confidence: 0, why: "No JSON: " + out.slice(0, 200) };
+}
+
+function normalize(parsed) {
+  return {
+    label: String(parsed.label || "DUDA").toUpperCase(),
+    confidence: Number(parsed.confidence ?? 0),
+    why: parsed.why || "",
+  };
+
 }
 
 /* ================= OPENAI TEXT (con prompt pro) ================= */
