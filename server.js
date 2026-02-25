@@ -728,9 +728,18 @@ async function fetchWhatsAppMediaUrl(mediaId) {
 }
 
 async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
-  const resp = await fetch(mediaUrl, { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } });
-  const arr = await resp.arrayBuffer();
-  return Buffer.from(arr);
+  const r = await axios.get(mediaUrl, {
+    responseType: "arraybuffer",
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN
+  });
+
+  const mimeType =
+    (r.headers?.["content-type"] || r.headers?.["Content-Type"] || "").split(";")[0].trim();
+
+  return {
+    buf: Buffer.from(r.data),
+    mimeType: mimeType || "image/jpeg",
+  };
 }
 
 function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
@@ -742,8 +751,8 @@ async function classifyPaymentImage({ mediaId }) {
   if (!openai) return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
 
   const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
-  const buf = await downloadWhatsAppMediaAsBuffer(mediaUrl);
-  const dataUrl = bufferToDataUrl(buf, "image/jpeg");
+  const { buf, mimeType } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
+const dataUrl = bufferToDataUrl(buf, mimeType);
 
   const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
 Reglas:
@@ -768,13 +777,50 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
 try {
   // intenta directo
-  return normalize(JSON.parse(out));
+  const parsed = JSON.parse(out);
+const normalized = normalize(parsed);
+
+const result = {
+  ...normalized,
+  mimeType
+};
+
+console.log("🧠 Clasificación IA:", {
+  mediaId,
+  mimeType,
+  label: result.label,
+  confidence: result.confidence,
+  why: result.why
+});
+
+return result;
+
 } catch {
   // intenta “rescatar” el primer objeto JSON dentro del texto
   const m = out.match(/\{[\s\S]*\}/);
   if (m) {
-    try { return normalize(JSON.parse(m[0])); } catch {}
+     try {
+  const parsed = JSON.parse(m[0]);
+  const normalized = normalize(parsed);
+
+  const result = {
+    ...normalized,
+    mimeType
+  };
+
+  console.log("🧠 Clasificación IA:", {
+    mediaId,
+    mimeType,
+    label: result.label,
+    confidence: result.confidence,
+    why: result.why
+  });
+
+  return result;
+
+} catch {}
   }
+
   return { label: "DUDA", confidence: 0, why: "No JSON: " + out.slice(0, 200) };
 }
 
@@ -903,7 +949,7 @@ app.post("/webhook", async (req, res) => {
   // Saludo UNA sola vez
   const greeted = await hasGreeted(wa_id);
   console.long("SESSION CHECK:", { wa_id, greeted })
-  
+
   if (!greeted) {
     await sendText(
       wa_id,
