@@ -99,6 +99,7 @@ Responsables: Inversiones El Agropecuario, representado por el señor Miguel Tor
 Ubicación: San José del Fragua, Caquetá, Colombia.
 Participación mediante boletería registrada y transmisión en vivo por redes sociales.
 Publicaciones activas en YouTube: https://www.youtube.com/@RifasElagropecuario
+https://www.facebook.com/profile.php?id=61588354538179&locale=es_LA
 ________________________________________
 CONDICIONES IMPORTANTES
 • Cada boleto representa una oportunidad de ganar.
@@ -189,16 +190,14 @@ ________________________________________
 MENSAJE DESPUÉS DE RECIBIR BOLETA
 gracias por su compra, te deseo mucha suerte y espero que ganes, ¡vamos a ganar!
 ________________________________________
-MENSAJE DE DESPEDIDA (10 minutos sin respuesta o cliente se despide)
-gracias por contactarnos, no dejes pasar la oportunidad de ganar excelentes premios.
-________________________________________
 SORTEOS ANTERIORES
 Cuando pregunten por campañas anteriores enviar:
 Fecha de sorteo: 27/12/2025
 https://www.facebook.com/share/v/1CCcqyKymt/
 https://www.youtube.com/shorts/pZyA9f1Fdr0?feature=share
+
 Influencer aliado Juancho:
-https://www.facebook.com/share/v/1CCcqyKymt/
+https://www.facebook.com/share/v/1CCcqyKymt/, sin embargo el unico canal oficial de ventas es por este medio y solo al presente numero de WhatsApp
 OTRAS ESPECIFICACIONES: 
 Horario de atención: lunes a domingo 8:30 am a 7:30 pm.
 `.trim();
@@ -243,7 +242,34 @@ function isThanks(text = "") {
   const t = String(text).toLowerCase().trim();
   return /\b(gracias|muchas gracias|mil gracias|grac)\b/.test(t);
 }
+function isAdQuestion(text = "") {
+  const t = String(text).toLowerCase().trim();
+  return (
+    t.includes("publicidad") ||
+    t.includes("facebook") ||
+    t.includes("instagram") ||
+    t.includes("tiktok") ||
+    t.includes("anuncio") ||
+    t.includes("promo") ||
+    t.includes("son ustedes") ||
+    t.includes("son los mismos") ||
+    t.includes("es real") ||
+    t.includes("es verdadero") ||
+    t.includes("oficial")
+  );
+}
 
+// memoria rápida por wa_id (si reinicias server se pierde; si quieres, luego la pasamos a sessions sheet)
+if (!global.lastImageCheck) global.lastImageCheck = new Map();
+
+function setLastImageLabel(wa_id, label) {
+  global.lastImageCheck.set(wa_id, { label, at: Date.now() });
+}
+
+function getLastImageLabel(wa_id) {
+  const data = global.lastImageCheck.get(wa_id);
+  return data ? data.label : null;
+}
 /* ================= SESSIONS (persistente en Sheets) ================= */
 
 async function getAllSessionsRowsAtoF() {
@@ -913,31 +939,42 @@ Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y 
 
     // IMAGE (filtro publicidad vs comprobante)
     if (type === "image") {
-      const mediaId = msg.image?.id;
+  const mediaId = msg.image?.id;
 
-      // IN conversations
-      await saveConversation({ wa_id, direction: "IN", message: "[image] recibido" });
+  await saveConversation({
+    wa_id,
+    direction: "IN",
+    message: "[imagen] recibida"
+  });
 
-      let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
-      try {
-        cls = await classifyPaymentImage({ mediaId });
-      } catch (e) {
-        console.warn("⚠️ Clasificación falló, continúo como DUDA:", e?.message || e);
-      }
+  let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
 
-      console.log("🧠 Clasificación imagen:", cls);
+  try {
+    cls = await classifyPaymentImage({ mediaId });
+  } catch (e) {
+    console.warn("⚠ Clasificación falló, continúo como DUDA:", e?.message || e);
+  }
 
-      if (cls.label === "PUBLICIDAD") {
-        await sendText(wa_id, "⚠️ Esa imagen parece publicidad. Por favor envíame el *comprobante de pago* (captura del recibo).");
-        return;
-      }
+  setLastImageLabel(wa_id, cls.label);
+  console.log("🧠 Clasificación imagen:", cls);
 
-      if (cls.label !== "COMPROBANTE") {
-        await sendText(wa_id, "👀 No logro confirmar si es un comprobante. Por favor envíame una captura clara del *recibo de pago*.");
-        return;
-      }
+  // 👇 AQUÍ van los IF
+  if (cls.label === "PUBLICIDAD") {
+    await sendText(wa_id,
+      "📢 Esa imagen parece publicidad.\n\nSi quieres confirmar si es oficial, dime dónde la viste (Facebook, Instagram, etc.) y te confirmo."
+    );
+    return;
+  }
 
-      const { ref } = await createReference({
+  if (cls.label !== "COMPROBANTE") {
+    await sendText(wa_id,
+      "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
+    );
+    return;
+  }
+
+  // ✅ Aquí crear referencia si es comprobante
+   const { ref } = await createReference({
         wa_id,
         last_msg_type: "image",
         receipt_media_id: mediaId,
