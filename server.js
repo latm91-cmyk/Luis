@@ -6,6 +6,7 @@ const fetch = require("node-fetch"); // v2
 const crypto = require("crypto");
 const FormData = require("form-data");
 const OpenAI = require("openai");
+const axios = require("axios");
 
 const app = express();
 
@@ -943,7 +944,7 @@ app.post("/webhook", async (req, res) => {
 
       // Saludo UNA sola vez
       const greeted = await hasGreeted(wa_id);
-      console.long("SESSION CHECK:", { wa_id, greeted })
+      console.log("SESSION CHECK:", { wa_id, greeted })
 
       if (!greeted) {
         await sendText(
