@@ -1440,8 +1440,9 @@ return;
       wa_id,
       "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
     );
-    await sendText(wa_id, reply);
-  } catch (e) {
+
+    await sendText(wa_id, reply); 
+  catch (e) {
     console.error("❌ /webhook error:", e?.message || e);
   }
 });
