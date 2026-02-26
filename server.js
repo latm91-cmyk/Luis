@@ -1419,7 +1419,8 @@ let reply = await withGreeting(
 
 await sendText(wa_id, reply, ref);
 return;
-
+    }
+    
     // =========================
     // DOCUMENT: pedir imagen
     // =========================
