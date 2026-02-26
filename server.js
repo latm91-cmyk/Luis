@@ -287,6 +287,86 @@ function isAdQuestion(text = "") {
   );
 }
 
+/* ============================================================
+   MEMORIA TEMPORAL (RAM) - últimos N mensajes por cliente
+   - No toca Sheets, no toca Telegram.
+   - Solo envuelve sendText y askOpenAI.
+   ============================================================ */
+
+const MEMORY_MAX_MESSAGES = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
+const memory = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
+
+function memPush(wa_id, role, content) {
+  if (!wa_id) return;
+  const text = String(content || "").trim();
+  if (!text) return;
+
+  const arr = memory.get(wa_id) || [];
+  arr.push({ role, content: text.slice(0, 1500), ts: new Date().toISOString() });
+
+  while (arr.length > MEMORY_MAX_MESSAGES) arr.shift();
+  memory.set(wa_id, arr);
+}
+
+function memGet(wa_id) {
+  return memory.get(wa_id) || [];
+}
+
+function memClear(wa_id) {
+  memory.delete(wa_id);
+}
+
+/**
+ * Wrapper: enviar WhatsApp + guardar memoria OUT
+ * MISMA FIRMA que tu sendText(to, bodyText, ref_id?)
+ */
+async function sendTextM(to, bodyText, ref_id = "") {
+  // llama tu función real
+  const r = await sendText(to, bodyText, ref_id);
+  // guarda memoria solo si envió OK (opcional)
+  memPush(to, "assistant", bodyText);
+  return r;
+}
+
+/**
+ * Wrapper: OpenAI con memoria
+ * MISMA idea que askOpenAI(userText, state) pero recibe wa_id para saber qué memoria usar.
+ * Ajusta si tu askOpenAI original ya recibe (userText, state)
+ */
+async function askOpenAIM(wa_id, userText, state = "BOT") {
+  // Si no hay openai, usa tu fallback original si existe
+  if (typeof openai === "undefined" || !openai) {
+    return "¿Te gustaría participar o conocer precios de boletas?";
+  }
+
+  const history = memGet(wa_id).map(m => ({ role: m.role, content: m.content }));
+
+  const resp = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      { role: "system", content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}` },
+      ...history,
+      { role: "user", content: userText },
+    ],
+  });
+
+  return (resp.output_text || "").trim() || "¿Me repites, por favor?";
+}
+
+/**
+ * Helper opcional: registrar IN (texto) en memoria y en Sheets si quieres llamarlo siempre
+ * (No reemplaza tu saveConversation, solo te facilita)
+ */
+async function onIncomingText(wa_id, text) {
+  // Memoria IN
+  memPush(wa_id, "user", text);
+
+  // Si quieres también guardar en Sheets aquí, descomenta:
+  // await saveConversation({ wa_id, direction: "IN", message: text });
+}
+
+/* =================== FIN BLOQUE MEMORIA =================== */
+
 // memoria rápida por wa_id (si reinicias server se pierde; si quieres, luego la pasamos a sessions sheet)
 if (!global.lastImageCheck) global.lastImageCheck = new Map();
 
@@ -848,20 +928,69 @@ function normalize(parsed) {
   };
 }
 
-/* ================= OPENAI TEXT (con prompt pro) ================= */
+// =============================
+// MEMORIA TEMPORAL (últimos 10 mensajes por cliente)
+// =============================
+const shortMemory = new Map(); // wa_id -> [{role, content}]
 
-async function askOpenAI(userText, state = "BOT") {
-  if (!openai) return "¿Te gustaría participar o conocer precios de boletas?";
+function memPush(wa_id, role, content) {
+  if (!wa_id) return;
+
+  const arr = shortMemory.get(wa_id) || [];
+  arr.push({
+    role,
+    content: String(content || "").slice(0, 1500),
+  });
+
+  // Mantener solo últimos 10 mensajes
+  while (arr.length > 10) arr.shift();
+
+  shortMemory.set(wa_id, arr);
+}
+
+function memGet(wa_id) {
+  return shortMemory.get(wa_id) || [];
+}
+
+
+// =============================
+// OPENAI TEXT (con memoria)
+// =============================
+async function askOpenAI(wa_id, userText, state = "BOT") {
+
+  if (!openai) {
+    return "¿Te gustaría participar o conocer precios de boletas?";
+  }
+
+  const history = memGet(wa_id);
 
   const resp = await openai.responses.create({
     model: "gpt-4o-mini",
     input: [
-      { role: "system", content: `${ SYSTEM_PROMPT } \n\nEstado actual del cliente: ${ state } ` },
-      { role: "user", content: userText },
+      {
+        role: "system",
+        content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
+      },
+
+      // 🔹 Memoria de conversación
+      ...history,
+
+      // 🔹 Mensaje actual del usuario
+      {
+        role: "user",
+        content: userText,
+      },
     ],
   });
 
-  return (resp.output_text || "").trim() || "¿Me repites, por favor?";
+  const output =
+    (resp.output_text || "").trim() || "¿Me repites, por favor?";
+
+  // 🔹 Guardar memoria (usuario y asistente)
+  memPush(wa_id, "user", userText);
+  memPush(wa_id, "assistant", output);
+
+  return output;
 }
 
 /* ================= MONITOR APROBADOS ================= */
@@ -1006,7 +1135,7 @@ app.post("/webhook", async (req, res) => {
         const text = await transcribeWhatsAppAudio(mediaId);
         const state = await getLatestStateByWaId(wa_id);
         const stage = await getConversationStage(wa_id);
-        const aiReplyRaw = await askOpenAI(text, state);
+        const aiReplyRaw = await askOpenAI(wa_id, text, state);
         const aiReply = humanizeIfJson(aiReplyRaw);
 
         const reply = await withGreeting(wa_id, aiReply);
@@ -1110,7 +1239,7 @@ if (type === "text") {
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
-  const aiReplyRaw = await askOpenAI(text, state, stage);
+  const aiReplyRaw = await askOpenAIM(wa_id, text, state);
   const aiReply = humanizeIfJson(aiReplyRaw);
 
   const reply = await withGreeting(wa_id, aiReply);
