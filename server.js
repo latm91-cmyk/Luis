@@ -1032,11 +1032,25 @@ app.post("/webhook", async (req, res) => {
   // Si venimos de una imagen PUBLICIDAD, resolver esa conversación primero
   if (lastLabel === "PUBLICIDAD") {
     const t = text.toLowerCase();
+    
+// Si envía link (Facebook/Instagram/TikTok) NO se confirma con URL solamente
+if (t.includes("http") || t.includes("facebook.com") || t.includes("instagram.com") || t.includes("tiktok.com")) {
+  const reply = await withGreeting(
+    wa_id,
+    "🔗 Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la página/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
+  );
+
+  await sendText(wa_id, reply);
+
+  // Limpia el contexto para que no repita “PUBLICIDAD” en el siguiente mensaje
+  setLastImageLabel(wa_id, null);
+  return;
+}
 
     if (t.includes("facebook")) {
       const reply = await withGreeting(
         wa_id,
-        "📌 Si la viste en nuestra página oficial de Facebook 'Rifas y Sorteos El Agropecuario', sí es publicidad oficial.\n\nSi tienes el enlace, envíamelo y te confirmo."
+        "📌 Asi es, Si la viste en nuestra página oficial de Facebook 'Rifas y Sorteos El Agropecuario', o en la pagina de nuestros colaboradores, es publicidad oficial."
       );
       await sendText(wa_id, reply);
 
@@ -1064,8 +1078,8 @@ app.post("/webhook", async (req, res) => {
   }
 
   await saveConversation({ wa_id, direction: "IN", message: text });
-
-  const state = await getLatestStateByWaId(wa_id);
+const state = await getLatestStateByWaId(wa_id);
+const stage = await getConversationStage(wa_id);
 
   // Gracias: responder humano según estado
   if (isThanks(text)) {
@@ -1105,7 +1119,7 @@ app.post("/webhook", async (req, res) => {
 if (isPricingIntent(text) || isBuyIntent(text)) {
   const qty = tryExtractBoletasQty(text);
 
-  // Si no dijo cantidad: muestro tabla + pregunto
+  // Si NO dijo cantidad: mostrar tabla + preguntar cantidad
   if (!qty) {
     await setConversationStage(wa_id, "AWAITING_QTY");
 
@@ -1125,21 +1139,19 @@ if (isPricingIntent(text) || isBuyIntent(text)) {
     return;
   }
 
-  // Si sí dijo cantidad: calculo y respondo
+  // Si SÍ dijo cantidad: calcular total y responder
   const breakdown = calcTotalCOPForBoletas(qty);
-
-  // Si por alguna razón no calculó, vuelvo a pedir cantidad
   if (!breakdown) {
-    await setConversationStage(wa_id, "AWAITING_QTY");
-
-    const reply = await withGreeting(
-      wa_id,
-      "✅ Perfecto. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)"
-    );
-
+    const reply = await withGreeting(wa_id, "No entendí cuántas boletas deseas. (Ej: 1, 2, 5, 10)");
     await sendText(wa_id, reply);
     return;
   }
+
+  await setConversationStage(wa_id, "PRICE_GIVEN");
+  const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
+  await sendText(wa_id, reply);
+  return;
+}
 
   await setConversationStage(wa_id, "PRICE_GIVEN");
 
@@ -1202,7 +1214,7 @@ if (stage === "PRICE_GIVEN" && text.toLowerCase().includes("si")) {
       if (cls.label === "PUBLICIDAD") {
         const reply = await withGreeting(
           wa_id,
-          "📢 Esa imagen parece publicidad.\n\nSi quieres confirmar si es oficial, dime dónde la viste (Facebook, Instagram, etc.) y te confirmo."
+          "📢 Esa imagen es publicidad.\n\nsi es nuestra publicidad."
         );
         await sendText(wa_id, reply);
         return;
