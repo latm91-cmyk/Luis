@@ -1097,6 +1097,34 @@ async function telegramDownloadFileBuffer(file_path) {
   return await r.buffer();
 }
 
+async function sendConversationLog(direction, wa_id, text) {
+  const chatId = process.env.TELEGRAM_GROUP_ID;
+  if (!chatId) return;
+
+  const prefix = direction === "IN" ? "👤 IN" : "🤖 OUT";
+
+  await telegramSendMessage(
+    chatId,
+    `${prefix}
+📱 ${wa_id}
+🗨️ ${String(text).slice(0, 3500)}`
+  );
+}
+
+async function sendConversationLog(direction, wa_id, text) {
+  const chatId = process.env.TELEGRAM_GROUP_ID;
+  if (!chatId) return;
+
+  const prefix = direction === "IN" ? "👤 IN" : "🤖 OUT";
+
+  await telegramSendMessage(
+    chatId,
+    `${prefix}
+📱 ${wa_id}
+🗨️ ${String(text).slice(0, 3500)}`
+  );
+}
+
 /* ================= ROUTES ================= */
 
 app.get("/", (req, res) => res.send("OK ✅"));
@@ -1167,6 +1195,7 @@ app.post("/webhook", async (req, res) => {
     // AUDIO (nota de voz / audio)
     // =========================
     if (type === "audio") {
+      await sendConversationLog("IN", wa_id, "[audio] recibido");
       const mediaId = msg.audio?.id;
 
       await saveConversation({ wa_id, direction: "IN", message: "[audio] recibido" });
@@ -1176,7 +1205,8 @@ app.post("/webhook", async (req, res) => {
           wa_id,
           "🎤 Recibí tu audio, pero no pude leerlo. Intenta enviarlo otra vez."
         );
-        await sendText(wa_id, reply);
+        await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
         return;
       }
 
@@ -1195,7 +1225,8 @@ app.post("/webhook", async (req, res) => {
           wa_id,
           "🎤 Recibí tu audio, pero no pude entenderlo. ¿Me lo escribes por texto, por favor?"
         );
-        await sendText(wa_id, reply);
+        await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
       }
       return;
     }
@@ -1207,7 +1238,10 @@ if (type === "text") {
   const text = (msg.text?.body || "").trim();
   const t = text.toLowerCase();
 
-  // Guardar conversación (solo una vez por mensaje)
+  // 🔹 LOG AL GRUPO DE CONVERSACIÓN
+  await sendConversationLog("IN", wa_id, text);
+
+  // Guardar conversación
   await saveConversation({ wa_id, direction: "IN", message: text });
 
   // Estado global (Sheets) + mini-stage
@@ -1243,7 +1277,8 @@ if (type === "text") {
         wa_id,
         "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que publicó el anuncio (arriba del post)."
       );
-      await sendText(wa_id, reply);
+      await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
       return;
@@ -1262,7 +1297,8 @@ if (type === "text") {
         wa_id,
         "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, envíame una *captura* donde se vea el *nombre del perfil/página* que lo publicó."
       );
-      await sendText(wa_id, reply);
+      await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
       return;
@@ -1280,7 +1316,8 @@ if (type === "text") {
       wa_id,
       "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
     );
-    await sendText(wa_id, reply);
+    await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
     return;
   }
 
@@ -1320,6 +1357,7 @@ const reply = await withGreeting(
   "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
 );
 
+await sendConversationLog("OUT", wa_id, reply);
 await sendText(wa_id, reply);
 return;
 }
@@ -1341,7 +1379,8 @@ if (stage === "PRICE_GIVEN") {
         wa_id,
         `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
       );
-      await sendText(wa_id, reply);
+      await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
       return;
     }
 
@@ -1350,7 +1389,8 @@ if (stage === "PRICE_GIVEN") {
       wa_id,
       `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
     );
-    await sendText(wa_id, reply);
+    await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
     return;
   }
 }
@@ -1370,14 +1410,16 @@ return;
     // =========================
     // IMAGE (filtro publicidad vs comprobante)
     // =========================
-    if (type === "image") {
-    // PUBLICIDAD
+        if (type === "image") {
+    await sendConversationLog("IN", wa_id, "[image] recibido");
+          // PUBLICIDAD
 if (cls.label === "PUBLICIDAD") {
   const reply = await withGreeting(
     wa_id,
     "📢 Esa imagen es publicidad."
   );
-  await sendText(wa_id, reply);
+  await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
   return;
 }
 
@@ -1387,7 +1429,8 @@ if (cls.label !== "COMPROBANTE") {
     wa_id,
     "👀 No logro confirmar si es un comprobante.\nPor favor envíame una imagen clara del pago."
   );
-  await sendText(wa_id, reply);
+ await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
   return;
 }
 
@@ -1420,7 +1463,7 @@ let reply = await withGreeting(
 await sendText(wa_id, reply, ref);
 return;
     }
-    
+
     // =========================
     // DOCUMENT: pedir imagen
     // =========================
@@ -1431,7 +1474,8 @@ return;
         wa_id,
         "📄 Recibí un documento. Por favor envíame el comprobante como *imagen/captura* para procesarlo más rápido."
       );
-      await sendText(wa_id, reply);
+      await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
       return;
     }
 
@@ -1442,11 +1486,22 @@ return;
       "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
     );
 
-    await sendText(wa_id, reply); 
+    await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
   } catch (e) {
-    console.error("❌ /webhook error:", e?.message || e);
+  console.error("❌ /webhook error:", e?.message || e);
+
+  try {
+    await telegramSendMessage(
+      process.env.TELEGRAM_CHAT_ID,
+      `🚨 ALERTA ASESOR
+📱 Cliente: ${typeof wa_id !== "undefined" ? wa_id : "desconocido"}
+🧨 Error: ${String(e?.message || e).slice(0, 500)}`
+    );
+  } catch (e2) {
+    console.error("❌ No pude enviar alerta a Telegram:", e2?.message || e2);
   }
-});
+}
 
 // TELEGRAM WEBHOOK (SECRET OBLIGATORIO)
 app.post("/telegram-webhook", async (req, res) => {
