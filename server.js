@@ -1106,69 +1106,7 @@ if (type === "text") {
     return;
   }
 
-  // ------------------------------------------------------------
-  // 3) MINI-STAGE: si estamos esperando cantidad, SOLO avanzamos si hay número
-  // ------------------------------------------------------------
-  if (stage === "AWAITING_QTY") {
-    const qty = tryExtractBoletasQty(text);
-    if (qty) {
-      const breakdown = calcTotalCOPForBoletas(qty);
-      if (breakdown) {
-        await setConversationStage(wa_id, "PRICE_GIVEN");
-        const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
-        await sendText(wa_id, reply);
-        return;
-      }
-    }
-    // Si no envió número claro, seguimos a IA (sin forzar)
-  }
-
-  // ------------------------------------------------------------
-  // 4) PRECIOS (determinístico) SOLO si el usuario pidió precios/comprar
-  //    NO usamos "sí" para nada.
-  // ------------------------------------------------------------
-  if (isPricingIntent(text) || isBuyIntent(text)) {
-    const qty = tryExtractBoletasQty(text);
-
-    // Si no dijo cantidad → mostramos tabla y preguntamos
-    if (!qty) {
-      await setConversationStage(wa_id, "AWAITING_QTY");
-
-      const reply = await withGreeting(
-        wa_id,
-        `💰 Valor boleta: $15.000
-
-✅ 1 boleta: $15.000
-✅ 2 boletas: $25.000
-✅ 5 boletas: $60.000
-✅ 10 boletas: $120.000
-
-¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)`
-      );
-
-      await sendText(wa_id, reply);
-      return;
-    }
-
-    // Si sí dijo cantidad → calculamos y respondemos
-    const breakdown = calcTotalCOPForBoletas(qty);
-    if (!breakdown) {
-      const replyErr = await withGreeting(
-        wa_id,
-        "No entendí la cantidad. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)"
-      );
-      await sendText(wa_id, replyErr);
-      return;
-    }
-
-    await setConversationStage(wa_id, "PRICE_GIVEN");
-
-    const reply2 = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
-    await sendText(wa_id, reply2);
-    return;
-  }
-
-  // ------------------------------------------------------------
+   // ------------------------------------------------------------
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
