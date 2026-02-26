@@ -1081,6 +1081,21 @@ async function telegramSendMessage(chat_id, text) {
   });
 }
 
+async function sendConversationLog(direction, wa_id, text) {
+  const groupId = process.env.TELEGRAM_GROUP_ID; // grupo para conversación completa
+  if (!groupId) return; // si no está configurado, no hace nada
+
+  const prefix = direction === "IN" ? "👤 IN" : "🤖 OUT";
+  const safeWa = wa_id || "desconocido";
+  const safeText = String(text || "").slice(0, 3500); // Telegram límite aprox
+
+  try {
+    await telegramSendMessage(groupId, `${prefix}\n📱 ${safeWa}\n🗨️ ${safeText}`);
+  } catch (e) {
+    console.error("❌ sendConversationLog falló:", e?.message || e);
+  }
+}
+
 async function telegramGetFilePath(file_id) {
   const r = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(file_id)}`
