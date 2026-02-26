@@ -1032,7 +1032,7 @@ app.post("/webhook", async (req, res) => {
   // Si venimos de una imagen PUBLICIDAD, resolver esa conversación primero
   if (lastLabel === "PUBLICIDAD") {
     const t = text.toLowerCase();
-    
+
 // Si envía link (Facebook/Instagram/TikTok) NO se confirma con URL solamente
 if (t.includes("http") || t.includes("facebook.com") || t.includes("instagram.com") || t.includes("tiktok.com")) {
   const reply = await withGreeting(
@@ -1078,8 +1078,8 @@ if (t.includes("http") || t.includes("facebook.com") || t.includes("instagram.co
   }
 
   await saveConversation({ wa_id, direction: "IN", message: text });
-const state = await getLatestStateByWaId(wa_id);
 const stage = await getConversationStage(wa_id);
+const state = await getLatestStateByWaId(wa_id);
 
   // Gracias: responder humano según estado
   if (isThanks(text)) {
@@ -1119,7 +1119,7 @@ const stage = await getConversationStage(wa_id);
 if (isPricingIntent(text) || isBuyIntent(text)) {
   const qty = tryExtractBoletasQty(text);
 
-  // Si NO dijo cantidad: mostrar tabla + preguntar cantidad
+  // Si no dijo cantidad → mostramos tabla + preguntamos
   if (!qty) {
     await setConversationStage(wa_id, "AWAITING_QTY");
 
@@ -1139,24 +1139,24 @@ if (isPricingIntent(text) || isBuyIntent(text)) {
     return;
   }
 
-  // Si SÍ dijo cantidad: calcular total y responder
+  // Si sí dijo cantidad → calculamos y respondemos
   const breakdown = calcTotalCOPForBoletas(qty);
+
+  // (Recomendado) Si no se pudo calcular, pedir cantidad otra vez
   if (!breakdown) {
-    const reply = await withGreeting(wa_id, "No entendí cuántas boletas deseas. (Ej: 1, 2, 5, 10)");
-    await sendText(wa_id, reply);
+    const replyErr = await withGreeting(
+      wa_id,
+      "No entendí la cantidad. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)"
+    );
+    await sendText(wa_id, replyErr);
     return;
   }
 
   await setConversationStage(wa_id, "PRICE_GIVEN");
-  const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
-  await sendText(wa_id, reply);
-  return;
-}
 
-  await setConversationStage(wa_id, "PRICE_GIVEN");
-
-  const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
-  await sendText(wa_id, reply);
+  // OJO: usamos reply2 para NO redeclarar "reply"
+  const reply2 = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
+  await sendText(wa_id, reply2);
   return;
 }
 
@@ -1266,8 +1266,8 @@ if (stage === "PRICE_GIVEN" && text.toLowerCase().includes("si")) {
       "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
     );
     await sendText(wa_id, reply);
-  } catch (err) {
-    console.error("❌ /webhook error:", err);
+  } catch (e) {
+    console.error("❌ /webhook error:", e?.message || e);
   }
 });
 
