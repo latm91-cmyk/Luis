@@ -1453,33 +1453,35 @@ return;
     // =========================
     // DOCUMENT: pedir imagen
     // =========================
-    if (type === "document") {
-      // Otros tipos (sticker, video, etc.)
-    await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
-    reply = await withGreeting(
-      wa_id,
-      "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
-    );
+    // =========================
+// DOCUMENT: pedir imagen
+// =========================
+if (type === "document") {
+  await saveConversation({ wa_id, direction: "IN", message: "[document] recibido" });
 
-    await sendConversationLog("OUT", wa_id, reply);
-    await sendText(wa_id, reply);
-    return;
+  const reply = await withGreeting(
+    wa_id,
+    "📄 Recibí un documento. Por favor envíame el comprobante como *imagen/captura* para procesarlo más rápido."
+  );
 
-  } catch (e) {
-    console.error("❌ /webhook error:", e?.message || e);
+  await sendConversationLog("OUT", wa_id, reply);
+  await sendText(wa_id, reply);
+  return;
+}
 
-    try {
-      await telegramSendMessage(
-        process.env.TELEGRAM_CHAT_ID,
-        `🚨 ALERTA ASESOR
-📱 Cliente: ${typeof wa_id !== "undefined" ? wa_id : "desconocido"}
-🧨 Error: ${String(e?.message || e).slice(0, 500)}`
-      );
-    } catch (e2) {
-      console.error("❌ No pude enviar alerta a Telegram:", e2?.message || e2);
-    }
-  }
-}); // ✅ ESTE ES EL ÚNICO CIERRE DEL app.post("/webhook"...)
+// Otros tipos (sticker, video, etc.)
+await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
+
+const reply = await withGreeting(
+  wa_id,
+  "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
+);
+
+await sendConversationLog("OUT", wa_id, reply);
+await sendText(wa_id, reply);
+return;
+
+// ✅ ESTE ES EL ÚNICO CIERRE DEL app.post("/webhook"...)
 
 // TELEGRAM WEBHOOK (SECRET OBLIGATORIO)
 app.post("/telegram-webhook", async (req, res) => {
