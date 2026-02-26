@@ -1436,7 +1436,7 @@ return;
 
     // Otros tipos (sticker, video, etc.)
     await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
-    let reply = await withGreeting(
+    reply = await withGreeting(
       wa_id,
       "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
     );
