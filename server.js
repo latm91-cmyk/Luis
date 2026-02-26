@@ -50,6 +50,9 @@ const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 // Control follow-up de ventas (1 solo recordatorio)
 const followUps = new Map();
 
+// Último precio calculado por usuario (para no repetir preguntas)
+const lastPriceQuote = new Map(); // wa_id -> { qty, total, packs5, packs2, packs1 }
+
 /* ================= PROMPT PRO (DEL HÍBRIDO) ================= */
 
 const SYSTEM_PROMPT = `
@@ -1307,14 +1310,48 @@ if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.inclu
 
   await setConversationStage(wa_id, "PRICE_GIVEN");
 
-  const reply = await withGreeting(
-    wa_id,
-    pricingReplyMessage(qty, breakdown) +
-      "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
-  );
+// ✅ Guardar el último cálculo para usarlo cuando el usuario diga "nequi" o "daviplata"
+lastPriceQuote.set(wa_id, breakdown);
 
-  await sendText(wa_id, reply);
-  return;
+const reply = await withGreeting(
+  wa_id,
+  pricingReplyMessage(qty, breakdown) +
+  "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
+);
+
+await sendText(wa_id, reply);
+return;
+}
+
+// ✅ Si ya dimos precio y el usuario eligió método, respondemos método sin volver a preguntar cantidad
+if (stage === "PRICE_GIVEN") {
+  const tt = t.toLowerCase();
+
+  if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
+    const quote = lastPriceQuote.get(wa_id);
+
+    // (opcional) si no hay quote, igual respondemos método sin inventar total
+    const resumen = quote?.total
+      ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
+      : "";
+
+    if (tt.includes("nequi")) {
+      const reply = await withGreeting(
+        wa_id,
+        `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+      );
+      await sendText(wa_id, reply);
+      return;
+    }
+
+    // daviplata
+    const reply = await withGreeting(
+      wa_id,
+      `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+    );
+    await sendText(wa_id, reply);
+    return;
+  }
 }
 
    // ------------------------------------------------------------
