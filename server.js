@@ -288,8 +288,6 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
 
 /* ================= HELPERS ================= */
 
-const FormData = require("form-data");
-
 async function sendTelegramPhoto(buffer, caption = "") {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -1003,31 +1001,6 @@ function normalize(parsed) {
     why: parsed.why || "",
   };
 }
-
-// =============================
-// MEMORIA TEMPORAL (últimos 20 mensajes por cliente)
-// =============================
-const shortMemory = new Map(); // wa_id -> [{role, content}]
-
-function memPush(wa_id, role, content) {
-  if (!wa_id) return;
-
-  const arr = shortMemory.get(wa_id) || [];
-  arr.push({
-    role,
-    content: String(content || "").slice(0, 1500),
-  });
-
-  // Mantener solo últimos 20 mensajes
-  while (arr.length > 20) arr.shift();
-
-  shortMemory.set(wa_id, arr);
-}
-
-function memGet(wa_id) {
-  return shortMemory.get(wa_id) || [];
-}
-
 
 // =============================
 // OPENAI TEXT (con memoria)
