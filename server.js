@@ -1102,14 +1102,16 @@ app.post("/webhook", async (req, res) => {
   }
 
   // ✅ Regla híbrida: precios / comprar
-  if (isPricingIntent(text) || isBuyIntent(text)) {
-    const qty = tryExtractBoletasQty(text);
-    if (!qty) {
-  await setConversationStage(wa_id, "AWAITING_QTY");
+if (isPricingIntent(text) || isBuyIntent(text)) {
+  const qty = tryExtractBoletasQty(text);
 
-  const reply = await withGreeting(
-    wa_id,
-    `💰 Valor boleta: $15.000
+  // Si no dijo cantidad: muestro tabla + pregunto
+  if (!qty) {
+    await setConversationStage(wa_id, "AWAITING_QTY");
+
+    const reply = await withGreeting(
+      wa_id,
+      `💰 Valor boleta: $15.000
 
 ✅ 1 boleta: $15.000
 ✅ 2 boletas: $25.000
@@ -1117,25 +1119,34 @@ app.post("/webhook", async (req, res) => {
 ✅ 10 boletas: $120.000
 
 ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)`
-  );
+    );
 
-  await sendText(wa_id, reply);
-  return;
-}
-
-    const breakdown = calcTotalCOPForBoletas(qty);
-    if (!breakdown) {
-      const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
-
-await setConversationStage(wa_id, "PRICE_GIVEN");
-
-await sendText(wa_id, reply);
-return;
-
-    const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
     await sendText(wa_id, reply);
     return;
   }
+
+  // Si sí dijo cantidad: calculo y respondo
+  const breakdown = calcTotalCOPForBoletas(qty);
+
+  // Si por alguna razón no calculó, vuelvo a pedir cantidad
+  if (!breakdown) {
+    await setConversationStage(wa_id, "AWAITING_QTY");
+
+    const reply = await withGreeting(
+      wa_id,
+      "✅ Perfecto. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)"
+    );
+
+    await sendText(wa_id, reply);
+    return;
+  }
+
+  await setConversationStage(wa_id, "PRICE_GIVEN");
+
+  const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
+  await sendText(wa_id, reply);
+  return;
+}
 
   // IA para lo demás
  if (stage === "AWAITING_QTY") {
