@@ -1442,7 +1442,7 @@ return;
     );
 
     await sendText(wa_id, reply); 
-  catch (e) {
+  } catch (e) {
     console.error("❌ /webhook error:", e?.message || e);
   }
 });
