@@ -1097,21 +1097,7 @@ async function telegramDownloadFileBuffer(file_path) {
   return await r.buffer();
 }
 
-async function sendConversationLog(direction, wa_id, text) {
-  const chatId = process.env.TELEGRAM_GROUP_ID;
-  if (!chatId) return;
-
-  const prefix = direction === "IN" ? "👤 IN" : "🤖 OUT";
-
-  await telegramSendMessage(
-    chatId,
-    `${prefix}
-📱 ${wa_id}
-🗨️ ${String(text).slice(0, 3500)}`
-  );
-}
-
-async function sendConversationLog(direction, wa_id, text) {
+async function onversationLosendCg(direction, wa_id, text) {
   const chatId = process.env.TELEGRAM_GROUP_ID;
   if (!chatId) return;
 
@@ -1495,13 +1481,14 @@ await sendText(wa_id, reply);
     await telegramSendMessage(
       process.env.TELEGRAM_CHAT_ID,
       `🚨 ALERTA ASESOR
+
 📱 Cliente: ${typeof wa_id !== "undefined" ? wa_id : "desconocido"}
 🧨 Error: ${String(e?.message || e).slice(0, 500)}`
     );
   } catch (e2) {
     console.error("❌ No pude enviar alerta a Telegram:", e2?.message || e2);
   }
-}
+});
 
 // TELEGRAM WEBHOOK (SECRET OBLIGATORIO)
 app.post("/telegram-webhook", async (req, res) => {
