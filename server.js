@@ -288,6 +288,34 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
 
 /* ================= HELPERS ================= */
 
+const FormData = require("form-data");
+
+async function sendTelegramPhoto(buffer, caption = "") {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  form.append("caption", caption);
+  form.append("photo", buffer, {
+    filename: "comprobante.jpg",
+  });
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${token}/sendPhoto`,
+    {
+      method: "POST",
+      body: form,
+    }
+  );
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    console.warn("Error enviando a Telegram:", data);
+  }
+}
+
 function todayYYMMDD() {
   const d = new Date();
   const yy = String(d.getFullYear()).slice(-2);
@@ -1370,54 +1398,54 @@ return;
     // IMAGE (filtro publicidad vs comprobante)
     // =========================
     if (type === "image") {
-      const mediaId = msg.image?.id;
+    // PUBLICIDAD
+if (cls.label === "PUBLICIDAD") {
+  const reply = await withGreeting(
+    wa_id,
+    "📢 Esa imagen es publicidad."
+  );
+  await sendText(wa_id, reply);
+  return;
+}
 
-      await saveConversation({ wa_id, direction: "IN", message: "[imagen] recibida" });
+// NO ES COMPROBANTE
+if (cls.label !== "COMPROBANTE") {
+  const reply = await withGreeting(
+    wa_id,
+    "👀 No logro confirmar si es un comprobante.\nPor favor envíame una imagen clara del pago."
+  );
+  await sendText(wa_id, reply);
+  return;
+}
 
-      let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
+// ✅ AQUI ES COMPROBANTE
 
-      try {
-        cls = await classifyPaymentImage({ mediaId });
-      } catch (e) {
-        console.warn("⚠ Clasificación falló, continúo como DUDA:", e?.message || e);
-      }
+// 1️⃣ Crear caption Telegram
+const caption =
+`🧾 NUEVO COMPROBANTE
+📱 Cliente: ${wa_id}
 
-      setLastImageLabel(wa_id, cls.label);
-      console.log("🧠 Clasificación imagen:", cls);
+Revisar y aprobar en sistema.`;
 
-      if (cls.label === "PUBLICIDAD") {
-        const reply = await withGreeting(
-          wa_id,
-          "📢 Esa imagen es publicidad.\n\nsi es nuestra publicidad."
-        );
-        await sendText(wa_id, reply);
-        return;
-      }
+// 2️⃣ Enviar al grupo Telegram
+await sendTelegramPhoto(buf, caption);
 
-      if (cls.label !== "COMPROBANTE") {
-        const reply = await withGreeting(
-          wa_id,
-          "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
-        );
-        await sendText(wa_id, reply);
-        return;
-      }
+// 3️⃣ Crear referencia
+const { ref } = await createReference({
+  wa_id,
+  last_msg_type: "image",
+  receipt_media_id: mediaId,
+  receipt_is_payment: "YES",
+});
 
-      // ✅ Aquí crear referencia si es comprobante
-      const { ref } = await createReference({
-        wa_id,
-        last_msg_type: "image",
-        receipt_media_id: mediaId,
-        receipt_is_payment: "YES",
-      });
+// 4️⃣ Responder al cliente
+const reply = await withGreeting(
+  wa_id,
+  `✅ Comprobante recibido.\n\n📌 Referencia: ${ref}\nTe avisaremos cuando sea aprobado.`
+);
 
-      const reply = await withGreeting(
-        wa_id,
-        `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago está en revisión.`
-      );
-      await sendText(wa_id, reply, ref);
-      return;
-    }
+await sendText(wa_id, reply, ref);
+return;
 
     // =========================
     // DOCUMENT: pedir imagen
