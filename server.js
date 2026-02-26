@@ -387,6 +387,25 @@ async function touchSession(wa_id) {
   await upsertSession({ wa_id, greeted: false });
 }
 
+/* ===== MINI SISTEMA DE ESTADO CONVERSACIONAL ===== */
+
+async function setConversationStage(wa_id, stage) {
+  const s = await getSessionByWaId(wa_id);
+  const greeted = s?.greeted || false;
+  await upsertSession({ wa_id, greeted, notes: stage });
+}
+
+async function getConversationStage(wa_id) {
+  const s = await getSessionByWaId(wa_id);
+  return s?.notes || "";
+}
+
+async function clearConversationStage(wa_id) {
+  const s = await getSessionByWaId(wa_id);
+  const greeted = s?.greeted || false;
+  await upsertSession({ wa_id, greeted, notes: "" });
+}
+
 /* ================= HYBRID RULES (DEL HÍBRIDO) ================= */
 
 function formatCOP(n) {
@@ -986,6 +1005,7 @@ app.post("/webhook", async (req, res) => {
       try {
         const text = await transcribeWhatsAppAudio(mediaId);
         const state = await getLatestStateByWaId(wa_id);
+        const stage = await getConversationStage(wa_id);
         const aiReplyRaw = await askOpenAI(text, state);
         const aiReply = humanizeIfJson(aiReplyRaw);
 
@@ -1085,23 +1105,32 @@ app.post("/webhook", async (req, res) => {
   if (isPricingIntent(text) || isBuyIntent(text)) {
     const qty = tryExtractBoletasQty(text);
     if (!qty) {
-      const reply = await withGreeting(
-        wa_id,
-        "✅ Claro. ¿Cuántas boletas deseas? (Ej: 1, 2, 5, 7, 10)"
-      );
-      await sendText(wa_id, reply);
-      return;
-    }
+  await setConversationStage(wa_id, "AWAITING_QTY");
+
+  const reply = await withGreeting(
+    wa_id,
+    `💰 Valor boleta: $15.000
+
+✅ 1 boleta: $15.000
+✅ 2 boletas: $25.000
+✅ 5 boletas: $60.000
+✅ 10 boletas: $120.000
+
+¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)`
+  );
+
+  await sendText(wa_id, reply);
+  return;
+}
 
     const breakdown = calcTotalCOPForBoletas(qty);
     if (!breakdown) {
-      const reply = await withGreeting(
-        wa_id,
-        "¿Cuántas boletas deseas? (Ej: 1, 2, 5, 10)"
-      );
-      await sendText(wa_id, reply);
-      return;
-    }
+      const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
+
+await setConversationStage(wa_id, "PRICE_GIVEN");
+
+await sendText(wa_id, reply);
+return;
 
     const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
     await sendText(wa_id, reply);
@@ -1109,6 +1138,30 @@ app.post("/webhook", async (req, res) => {
   }
 
   // IA para lo demás
+ if (stage === "AWAITING_QTY") {
+  const qty = tryExtractBoletasQty(text);
+  if (qty) {
+    const breakdown = calcTotalCOPForBoletas(qty);
+    if (breakdown) {
+      await setConversationStage(wa_id, "PRICE_GIVEN");
+      const reply = await withGreeting(wa_id, pricingReplyMessage(qty, breakdown));
+      await sendText(wa_id, reply);
+      return;
+    }
+  }
+}
+
+if (stage === "PRICE_GIVEN" && text.toLowerCase().includes("si")) {
+  await clearConversationStage(wa_id);
+
+  const reply = await withGreeting(
+    wa_id,
+    "Perfecto 🙌 Puedes realizar tu pago por Nequi o Daviplata y enviarme el comprobante con tus datos."
+  );
+
+  await sendText(wa_id, reply);
+  return;
+}
   const aiReplyRaw = await askOpenAI(text, state);
   const aiReply = humanizeIfJson(aiReplyRaw);
 
