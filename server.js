@@ -556,6 +556,12 @@ function calcTotalCOPForBoletas(n) {
   return { qty, total, packs5, packs2, packs1 };
 }
 
+// ✅ NUEVA FUNCIÓN (NO reemplaza nada)
+function calcBreakdownAnyQty(qty) {
+  const result = calcTotalCOPForBoletas(qty);
+  return result; 
+}
+
 function tryExtractBoletasQty(text = "") {
   const t = String(text).toLowerCase();
 
@@ -968,7 +974,7 @@ function normalize(parsed) {
 }
 
 // =============================
-// MEMORIA TEMPORAL (últimos 10 mensajes por cliente)
+// MEMORIA TEMPORAL (últimos 20 mensajes por cliente)
 // =============================
 const shortMemory = new Map(); // wa_id -> [{role, content}]
 
@@ -981,8 +987,8 @@ function memPush(wa_id, role, content) {
     content: String(content || "").slice(0, 1500),
   });
 
-  // Mantener solo últimos 10 mensajes
-  while (arr.length > 10) arr.shift();
+  // Mantener solo últimos 20 mensajes
+  while (arr.length > 20) arr.shift();
 
   shortMemory.set(wa_id, arr);
 }
@@ -1288,7 +1294,7 @@ if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.inclu
   // const breakdown = calcTotalCOPForBoletas(qty);
 
   // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
-  const breakdown = calcTotalCOPForBoletas(qty) || calcBreakdownAnyQty(qty);
+  const breakdown = calcTotalCOPForBoletas(qty);
 
   if (!breakdown) {
     const replyErr = await withGreeting(
@@ -1318,9 +1324,9 @@ if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.inclu
   const aiReplyRaw = await askOpenAIM(wa_id, text, state);
   const aiReply = humanizeIfJson(aiReplyRaw);
 
-  const reply = await withGreeting(wa_id, aiReply);
-  await sendText(wa_id, reply);
-  return;
+  const replyAI = await withGreeting(wa_id, aiReply);
+await sendText(wa_id, replyAI);
+return;
 }
 
     // =========================
