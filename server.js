@@ -1274,6 +1274,43 @@ if (type === "text") {
     return;
   }
 
+// ------------------------------------------------------------
+// CAPTURA DURA DE CANTIDAD (evita loops)
+// Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
+// ------------------------------------------------------------
+const qtyCandidate = tryExtractBoletasQty(text);
+
+// Si estamos esperando cantidad, o si el texto menciona boletas + número
+if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
+  const qty = qtyCandidate;
+
+  // Si tu función ya soporta cualquier número, úsala:
+  // const breakdown = calcTotalCOPForBoletas(qty);
+
+  // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
+  const breakdown = calcTotalCOPForBoletas(qty) || calcBreakdownAnyQty(qty);
+
+  if (!breakdown) {
+    const replyErr = await withGreeting(
+      wa_id,
+      "No entendí la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
+    );
+    await sendText(wa_id, replyErr);
+    return;
+  }
+
+  await setConversationStage(wa_id, "PRICE_GIVEN");
+
+  const reply = await withGreeting(
+    wa_id,
+    pricingReplyMessage(qty, breakdown) +
+      "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
+  );
+
+  await sendText(wa_id, reply);
+  return;
+}
+
    // ------------------------------------------------------------
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
