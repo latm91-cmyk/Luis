@@ -1412,7 +1412,7 @@ const { ref } = await createReference({
 });
 
 // 4️⃣ Responder al cliente
-const reply = await withGreeting(
+let reply = await withGreeting(
   wa_id,
   `✅ Comprobante recibido.\n\n📌 Referencia: ${ref}\nTe avisaremos cuando sea aprobado.`
 );
@@ -1436,7 +1436,7 @@ return;
 
     // Otros tipos (sticker, video, etc.)
     await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
-    const reply = await withGreeting(
+    let reply = await withGreeting(
       wa_id,
       "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
     );
