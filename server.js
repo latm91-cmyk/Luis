@@ -1028,7 +1028,6 @@ app.post("/webhook", async (req, res) => {
 if (type === "text") {
   const text = (msg.text?.body || "").trim();
   const t = text.toLowerCase();
-  const lastLabel = getLastImageLabel(wa_id);
 
   // Guardar conversación (solo una vez por mensaje)
   await saveConversation({ wa_id, direction: "IN", message: text });
@@ -1037,9 +1036,10 @@ if (type === "text") {
   const state = await getLatestStateByWaId(wa_id);
   const stage = await getConversationStage(wa_id);
 
+  const lastLabel = getLastImageLabel(wa_id);
+
   // ------------------------------------------------------------
   // 1) CONTEXTO: si venimos de una imagen clasificada como PUBLICIDAD
-  //    (esto evita que la IA responda raro cuando el usuario solo dice "facebook" o pega un link)
   // ------------------------------------------------------------
   if (lastLabel === "PUBLICIDAD") {
     // Si envía link: NO confirmamos por link. Pedimos captura/nombre del perfil.
@@ -1055,12 +1055,11 @@ if (type === "text") {
       );
       await sendText(wa_id, reply);
 
-      // Importantísimo: limpiar contexto para que no repita “PUBLICIDAD”
       setLastImageLabel(wa_id, null);
       return;
     }
 
-    // Respuesta simple si menciona Facebook (sin confirmar por link)
+    // Si menciona Facebook (sin link)
     if (t.includes("facebook")) {
       const reply = await withGreeting(
         wa_id,
@@ -1072,13 +1071,12 @@ if (type === "text") {
       return;
     }
 
-    // Si pregunta "es de ustedes / es publicidad"
+    // Si pregunta “es de ustedes / es publicidad / si”
     if (
       t.includes("es publicidad") ||
       t.includes("si es publicidad") ||
       t.includes("es de ustedes") ||
       t.includes("de ustedes") ||
-      t.includes("si es") ||
       t === "si" ||
       t === "sí"
     ) {
@@ -1092,32 +1090,13 @@ if (type === "text") {
       return;
     }
 
-    // Si no respondió algo útil, limpiamos igual y seguimos al flujo normal (IA)
+    // Si no fue útil, limpiamos contexto y seguimos con IA
     setLastImageLabel(wa_id, null);
-    // NO return; seguimos
   }
 
   // ------------------------------------------------------------
-  // 2) REGLAS QUE DEBEN GANARLE A LA IA (determinísticas)
+  // 2) GUARDARRÍL: EN_REVISION siempre gana
   // ------------------------------------------------------------
-
-  // Gracias (humano) según estado
-  if (isThanks(text)) {
-    let base = "🙏 ¡Con gusto! ¿Deseas participar en la rifa?";
-    if (state === "BOLETA_ENVIADA") {
-      base = "🙏 ¡Gracias a ti por tu compra! Mucha suerte 🍀 Si necesitas algo más, aquí estoy.";
-    } else if (state === "APROBADO") {
-      base = "🙏 ¡Con gusto! Tu pago ya está aprobado. En breve te enviamos tu boleta. 🙌";
-    } else if (state === "EN_REVISION") {
-      base = "🙏 ¡Con gusto! Tu pago sigue en revisión. Apenas quede aprobado te aviso.";
-    }
-
-    const reply = await withGreeting(wa_id, base);
-    await sendText(wa_id, reply);
-    return;
-  }
-
-  // EN_REVISION: mensaje fijo
   if (state === "EN_REVISION") {
     const reply = await withGreeting(
       wa_id,
@@ -1127,18 +1106,9 @@ if (type === "text") {
     return;
   }
 
-  // "ya pagué"
-  if (isAlreadyPaidIntent(text)) {
-    const reply = await withGreeting(wa_id, paidInstructionMessage());
-    await sendText(wa_id, reply);
-    return;
-  }
-
   // ------------------------------------------------------------
-  // 3) MINI-SISTEMA DE STAGE SOLO PARA CANTIDAD (sin usar "sí")
+  // 3) MINI-STAGE: si estamos esperando cantidad, SOLO avanzamos si hay número
   // ------------------------------------------------------------
-
-  // Si está esperando cantidad, solo avanzamos si el usuario mandó número
   if (stage === "AWAITING_QTY") {
     const qty = tryExtractBoletasQty(text);
     if (qty) {
@@ -1150,11 +1120,12 @@ if (type === "text") {
         return;
       }
     }
-    // Si NO mandó número claro, NO forzamos nada: pasamos a IA
+    // Si no envió número claro, seguimos a IA (sin forzar)
   }
 
   // ------------------------------------------------------------
-  // 4) PRECIOS: SOLO si lo pidió explícitamente (NO por "sí")
+  // 4) PRECIOS (determinístico) SOLO si el usuario pidió precios/comprar
+  //    NO usamos "sí" para nada.
   // ------------------------------------------------------------
   if (isPricingIntent(text) || isBuyIntent(text)) {
     const qty = tryExtractBoletasQty(text);
@@ -1181,7 +1152,6 @@ if (type === "text") {
 
     // Si sí dijo cantidad → calculamos y respondemos
     const breakdown = calcTotalCOPForBoletas(qty);
-
     if (!breakdown) {
       const replyErr = await withGreeting(
         wa_id,
@@ -1200,14 +1170,9 @@ if (type === "text") {
 
   // ------------------------------------------------------------
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
+  //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
-
-  // (Opcional pero recomendado) darle contexto de stage a la IA sin cambiar tu prompt:
-  // si tu askOpenAI solo recibe (text, state), puedes concatenar el stage:
-  const aiInput =
-    stage ? `ContextoConversación: ${stage}\nUsuario: ${text}` : text;
-
-  const aiReplyRaw = await askOpenAI(aiInput, state);
+  const aiReplyRaw = await askOpenAI(text, state, stage);
   const aiReply = humanizeIfJson(aiReplyRaw);
 
   const reply = await withGreeting(wa_id, aiReply);
