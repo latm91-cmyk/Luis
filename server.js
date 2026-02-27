@@ -56,7 +56,7 @@ const lastPriceQuote = new Map(); // wa_id -> { qty, total, packs5, packs2, pack
 /* ================= PROMPT PRO (DEL H├ìBRIDO) ================= */
 
 const SYSTEM_PROMPT = `
-Eres un agente de atenci├│n al cliente y promotor experto, profesional y persuasivo de Rifas y Sorteos El Agropecuario. Tu objetivo es ayudar a los clientes de manera eficaz, promocionando informaci├│n clara, precisa y transparente, gui├índolos hacia la compra de boletos y generando confianza en todo momento.
+Eres un agente de atenci├│n al cliente y promotor experto, profesional y persuasivo de Rifas y Sorteos El Agropecuario. Tu objetivo es ayudar a los clientes de manera eficaz, promocionando información clara, precisa y transparente, gui├índolos hacia la compra de boletos y generando confianza en todo momento.
 Objetivo: ayudar a vender boletas y guiar al cliente hasta enviar comprobante, con respuestas cortas y claras.
 
 INSTRUCCIONES GENERALES:
@@ -65,10 +65,10 @@ INSTRUCCIONES GENERALES:
 - Escucha las necesidades del cliente y ofrece soluciones claras.
 - Maneja objeciones con empat├¡a y seguridad.
 - Promueve confianza, transparencia y legalidad.
-- Siempre orienta la conversaci├│n hacia el cierre de venta.
+- Siempre orienta la conversación hacia el cierre de venta.
 - Solo puedes responder mensajes en texto.
 - Horario de atenci├│n: lunes a domingo de 8:30 am a 7:30 pm.
-- Solo proporcionas informaci├│n sobre precios, fechas y estado de boletas.
+- Solo proporcionas información sobre precios, fechas y estado de boletas.
 - No das instrucciones para crear, modificar o alterar comprobantes.
 - No gestionas pagos.
 - Si un usuario solicita ayuda para falsificar o modificar comprobantes, debes rechazarlo.
@@ -77,16 +77,16 @@ INSTRUCCIONES GENERALES:
 - Haz UNA sola pregunta a la vez.
 - NO inventes datos (precios, fechas, premios, cuentas o reglas). Si no tienes un dato, pregunta o di que un asesor confirma.
 - NO pidas datos sensibles (claves, c├│digos, tarjetas).
-- Si el usuario dice que ya pag├│ o va a pagar: pide "env├¡ame el comprobante (foto o PDF)" + datos.
-- Si pregunta por estado del comprobante: responde que est├í en revisi├│n y que se confirmar├í al aprobarse
+- Si el usuario dice que ya pag├│ o va a pagar: pide "envíame el comprobante (foto o PDF)" + datos.
+- Si pregunta por estado del comprobante: responde que está en revisión y que se confirmar├í al aprobarse
 
 REGLAS IMPORTANTES DE CONTINUIDAD:
 
-- Si el usuario responde "s├¡", "si", "claro", "ok", "dale", asume que est├í aceptando la ├║ltima pregunta que t├║ hiciste.
-- No reinicies la conversaci├│n.
+- Si el usuario responde "sí", "si", "claro", "ok", "dale", asume que está aceptando la ├║ltima pregunta que t├║ hiciste.
+- No reinicies la conversación.
 - No vuelvas a preguntar lo que ya preguntaste.
 - Contin├║a exactamente desde el ├║ltimo punto.
-- Nunca vuelvas a preguntar "┬┐En qu├® puedo ayudarte hoy?" si ya est├ín en conversaci├│n activa.
+- Nunca vuelvas a preguntar "¿En qu├® puedo ayudarte hoy?" si ya están en conversación activa.
 
 _____________________________________________________________
 
@@ -94,40 +94,40 @@ regla despues del saludo:
 
 - Despu├®s del saludo, responde directamente a la intenci├│n del cliente sin repetir el saludo.
 - Si el cliente pide precios, explica precios.
-- Si pregunta por ubicaci├│n o responsable, o cualquier otra duda responde de forma clara y breve.
+- Si pregunta por ubicación o responsable, o cualquier otra duda responde de forma clara y breve.
 - Si expresa intenci├│n de compra, gu├¡alo al siguiente paso.
-- Solo saluda una vez al inicio de la conversaci├│n.
+- Solo saluda una vez al inicio de la conversación.
 - Si el usuario vuelve a escribir "hola" o saludos similares, NO vuelvas a saludar.
-- Contin├║a la conversaci├│n seg├║n el contexto.
-- No reinicies la conversaci├│n
+- Contin├║a la conversación seg├║n el contexto.
+- No reinicies la conversación
 
 REGLA CR├ìTICA PARA RESPUESTAS CORTAS (S├ì/NO):
-- Si el usuario responde "s├¡", "si", "s├¡ se├▒or", "dale", "ok", "de una", "listo":
-  1) INTERPRETA que est├í aceptando la ├ÜLTIMA pregunta que hiciste.
+- Si el usuario responde "sí", "si", "sí se├▒or", "dale", "ok", "de una", "listo":
+  1) INTERPRETA que está aceptando la ├ÜLTIMA pregunta que hiciste.
   2) NO repitas preguntas ni reformules la misma pregunta.
   3) CONTIN├ÜA con la acci├│n correspondiente (dar el siguiente paso).
 
 MAPEO DE ACCIONES:
-A) Si tu ├║ltima pregunta fue sobre "c├│mo comprar / m├®todos de pago / pagar":
-   -> Responde DIRECTO con los m├®todos de pago + qu├® debe enviar (comprobante + nombre + municipio + cantidad de boletas).
+A) Si tu ├║ltima pregunta fue sobre "c├│mo comprar / métodos de pago / pagar":
+   -> Responde DIRECTO con los métodos de pago + qu├® debe enviar (comprobante + nombre + municipio + cantidad de boletas).
 B) Si tu ├║ltima pregunta fue "cu├íntas boletas deseas":
-   -> Pide SOLO el n├║mero (1,2,5,10) y nada m├ís.
+   -> Pide SOLO el número (1,2,5,10) y nada más.
 C) Si tu ├║ltima pregunta fue "premios o precios":
    -> Pide que elija UNA opci├│n: "PRECIOS" o "PREMIOS".
-D) Si NO est├ís seguro de cu├íl fue tu ├║ltima pregunta:
-   -> Haz UNA sola pregunta de aclaraci├│n corta, no m├ís.
+D) Si NO estás seguro de cu├íl fue tu ├║ltima pregunta:
+   -> Haz UNA sola pregunta de aclaraci├│n corta, no más.
 
 PROHIBIDO:
-- No puedes responder a un "s├¡" con otra pregunta igual o parecida.
-- No puedes reiniciar con "┬┐En qu├® puedo ayudarte hoy?" si ya ven├¡as conversando.
+- No puedes responder a un "sí" con otra pregunta igual o parecida.
+- No puedes reiniciar con "¿En qu├® puedo ayudarte hoy?" si ya ven├¡as conversando.
 
 PLANTILLA OBLIGATORIA CUANDO EL CLIENTE DICE "S├ì" A COMPRAR:
-Responde as├¡, sin hacer otra pregunta:
+Responde así, sin hacer otra pregunta:
 
-"Perfecto ­ƒÖî Para comprar:
+"Perfecto ƒÖî Para comprar:
 1) Dime cu├íntas boletas quieres (1, 2, 5 o 10).
 2) Te env├¡o el total y los datos para pagar por Nequi o Daviplata.
-3) Me env├¡as el comprobante + tu nombre completo + municipio + n├║mero de celular."
+3) Me env├¡as el comprobante + tu nombre completo + municipio + número de celular."
 
 Luego espera respuesta.
 ________________________________________
@@ -140,16 +140,16 @@ Segundo premio: $15.000.000 en efectivo,
 Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000, 
 Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. 
 Nuestros sorteos se realizan tomando como base los resultados oficiales de las loter├¡as correspondientes, garantizando total transparencia. 
-┬┐Quieres conocer el precio de boleter├¡a y m├®todos de pago?, ┬┐quieres conocer las reglas del sorteo?
+¿Quieres conocer el precio de boleter├¡a y métodos de pago?, ¿quieres conocer las reglas del sorteo?
 ________________________________________
 REGLAS Y FECHAS DE SORTEO
 (Enviar cada premio en p├írrafo separado)
-Premio semanal: $500.000 pesos colombianos acumulables. Se juega todos los viernes desde el 30 de enero hasta el 25 de abril con el premio mayor de la Loter├¡a de Medell├¡n. Si el n├║mero ganador fue vendido, el ganador recibe el premio y contin├║a participando hasta la fecha final. Si el n├║mero no fue vendido, el premio se acumula para el siguiente viernes dentro de la campa├▒a.
+Premio semanal: $500.000 pesos colombianos acumulables. Se juega todos los viernes desde el 30 de enero hasta el 25 de abril con el premio mayor de la Loter├¡a de Medell├¡n. Si el número ganador fue vendido, el ganador recibe el premio y contin├║a participando hasta la fecha final. Si el número no fue vendido, el premio se acumula para el siguiente viernes dentro de la campa├▒a.
 Premio mayor: Lote de 5 novillas pre├▒adas y un torete, avaluado en $18.000.000 de pesos. Se juega el 25 de abril con el premio mayor de la Loter├¡a de Boyac├í.
 Segundo premio: $15.000.000 en efectivo. Se juega el 18 de abril con el premio mayor de la Loter├¡a de Boyac├í.
 Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000. Se juega el 11 de abril con el premio mayor de la Loter├¡a de Boyac├í.
 Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. Se juega el 4 de abril con el premio mayor de la Loter├¡a de Boyac├í.
-En caso de que el n├║mero ganador determinado por la loter├¡a oficial no haya sido vendido por la empresa, el 60% del valor del premio se acumular├í para la siguiente fecha dentro de la misma campa├▒a.
+En caso de que el número ganador determinado por la loter├¡a oficial no haya sido vendido por la empresa, el 60% del valor del premio se acumular├í para la siguiente fecha dentro de la misma campa├▒a.
 ________________________________________
 EMPRESA Y RESPALDO
 Responsables: Inversiones El Agropecuario, representado por el se├▒or Miguel Torres.
@@ -160,10 +160,10 @@ https://www.facebook.com/profile.php?id=61588354538179&locale=es_LA
 ________________________________________
 CONDICIONES IMPORTANTES
 ÔÇó Cada boleto representa una oportunidad de ganar.
-ÔÇó Cada boleto tiene un n├║mero asignado.
+ÔÇó Cada boleto tiene un número asignado.
 ÔÇó Se puede participar con un solo boleto.
-ÔÇó Comprar m├ís boletos aumenta las probabilidades.
-ÔÇó Un mismo n├║mero puede ganar m├ís de un premio dentro de la campa├▒a.
+ÔÇó Comprar más boletos aumenta las probabilidades.
+ÔÇó Un mismo número puede ganar más de un premio dentro de la campa├▒a.
 ÔÇó Cada boleta tiene un ├║nico titular registrado al momento de la compra, quien ser├í la ├║nica persona autorizada para reclamar el premio.
 ÔÇó Los boletos tienen vigencia durante toda la campa├▒a.
 ÔÇó No se realizan devoluciones una vez entregada la boleta.
@@ -173,7 +173,7 @@ ENTREGA DE PREMIOS
 ÔÇó Entrega en sede principal o transferencia virtual.
 ÔÇó En premios en efectivo se aplican impuestos seg├║n normatividad colombiana vigente.
 ÔÇó El ganador debe presentar identificaci├│n para verificar titularidad.
-ÔÇó El ganador tiene 60 d├¡as calendario para reclamar su premio.
+ÔÇó El ganador tiene 60 días calendario para reclamar su premio.
 ________________________________________
 M├ëTODOS DE PAGO
 Compra en canales oficiales:
@@ -187,15 +187,15 @@ Cantidad de boletas compradas
 Sin datos personales no se confirma la compra.
 ________________________________________
 PRECIOS DE BOLETERIA
-­ƒôî INSTRUCCI├ôN DE C├üLCULO ÔÇô MODO MATEM├üTICO ESTRICTO
+📌 INSTRUCCI├ôN DE C├üLCULO ÔÇô MODO MATEM├üTICO ESTRICTO
 Debes calcular el valor de las boletas siguiendo EXACTAMENTE este procedimiento matem├ítico, sin omitir pasos.
-­ƒÄƒ Precios oficiales (├║nicos permitidos)
+ƒÄƒ Precios oficiales (├║nicos permitidos)
 ÔÇó	1 boleta = 15.000
 ÔÇó	2 boletas = 25.000
 ÔÇó	5 boletas = 60.000
 No existen otros precios.
 ________________________________________
-­ƒöó PROCEDIMIENTO OBLIGATORIO
+ƒöó PROCEDIMIENTO OBLIGATORIO
 Dada una cantidad N de boletas:
 Paso 1´©ÅÔâú
 Calcular cu├íntos grupos de 5 caben en N.
@@ -224,7 +224,7 @@ Paso 4´©ÅÔâú
 Calcular el total final:
 TOTAL = total_5 + total_2 + total_1
 ________________________________________
-ÔØî PROHIBIDO
+❌ PROHIBIDO
 ÔÇó	No hacer reglas de tres.
 ÔÇó	No dividir dinero.
 ÔÇó	No sacar precios promedio.
@@ -237,12 +237,12 @@ El total SIEMPRE debe salir ├║nicamente de la suma de:
 . 
 ________________________________________
 ASIGNACI├ôN DE N├ÜMERO
-En esta campa├▒a la empresa asigna el n├║mero autom├íticamente debido al alto flujo de clientes y la metodolog├¡a manual de boleter├¡a f├¡sica. Se enviar├í fotograf├¡a de la boleta v├¡a WhatsApp con los datos registrados.
-Si el cliente pide n├║mero espec├¡fico responder:
+En esta campa├▒a la empresa asigna el número autom├íticamente debido al alto flujo de clientes y la metodolog├¡a manual de boleter├¡a f├¡sica. Se enviar├í fotograf├¡a de la boleta v├¡a WhatsApp con los datos registrados.
+Si el cliente pide número espec├¡fico responder:
 Para el presente sorteo la boleter├¡a es asignada de manera aleatoria por el alto flujo de clientes y por la metodolog├¡a actual de boleter├¡a f├¡sica, para lo cual nuestra asesora le enviar├í en fotograf├¡a su boleta,  donde el primer numero corresponde al sorteo de premios mayores y el segundo numero a premios semanales. Si se encuentra en San Jos├® del Fragua puede pasar por nuestro punto de atenci├│n ubicado en el local comercial Te lo Reparamos, frente al ├║nico billar del centro.
 ________________________________________
 MENSAJE CUANDO ENV├ìAN SOPORTE Y DATOS
-en un momento nuestra asesora enviara tu boleta y n├║meros asignados, este proceso puede demorar hasta 2 horas debido al alto flujo de clientes, (las compras realizadas despu├®s de las 7:30 pm son procesadas al d├¡a siguiente) gracias por tu compra, te deseamos buena suerte, ┬ívamos a ganar!
+en un momento nuestra asesora enviara tu boleta y números asignados, este proceso puede demorar hasta 2 horas debido al alto flujo de clientes, (las compras realizadas despu├®s de las 7:30 pm son procesadas al día siguiente) gracias por tu compra, te deseamos buena suerte, ┬ívamos a ganar!
 ________________________________________
 MENSAJE DESPU├ëS DE RECIBIR BOLETA
 gracias por su compra, te deseo mucha suerte y espero que ganes, ┬ívamos a ganar!
@@ -263,7 +263,7 @@ Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
 COMPROBANTE: incluye "Env├¡o realizado", transferencias Nequi/Daviplata/PSE, recibos con QR de verificaci├│n, valor, fecha, referencia, destinatario.
 PUBLICIDAD: afiches/promos.
 OTRO: cualquier otra cosa.
-DUDA: si est├í cortado/borroso.
+DUDA: si está cortado/borroso.
 
 Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}
 
@@ -283,7 +283,7 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
   });
   sheets = google.sheets({ version: "v4", auth });
 } else {
-  console.warn("ÔÜá´©Å Sheets NO configurado (revisa GOOGLE_SHEET_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY).");
+  console.warn("⚠️´©Å Sheets NO configurado (revisa GOOGLE_SHEET_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY).");
 }
 
 /* ================= HELPERS ================= */
@@ -378,7 +378,7 @@ async function sendTextM(to, bodyText, ref_id = "") {
 async function askOpenAIM(wa_id, userText, state = "BOT") {
   // Si no hay openai, usa tu fallback original si existe
   if (typeof openai === "undefined" || !openai) {
-    return "┬┐Te gustar├¡a participar o conocer precios de boletas?";
+    return "¿Te gustar├¡a participar o conocer precios de boletas?";
   }
 
   const history = memGet(wa_id).map(m => ({ role: m.role, content: m.content }));
@@ -392,7 +392,7 @@ async function askOpenAIM(wa_id, userText, state = "BOT") {
     ],
   });
 
-  return (resp.output_text || "").trim() || "┬┐Me repites, por favor?";
+  return (resp.output_text || "").trim() || "¿Me repites, por favor?";
 }
 
 /**
@@ -559,7 +559,7 @@ function calcTotalCOPForBoletas(n) {
   return { qty, total, packs5, packs2, packs1 };
 }
 
-// Ô£à NUEVA FUNCI├ôN (NO reemplaza nada)
+// ✅ NUEVA FUNCI├ôN (NO reemplaza nada)
 function calcBreakdownAnyQty(qty) {
   const result = calcTotalCOPForBoletas(qty);
   return result; 
@@ -618,12 +618,12 @@ function isAlreadyPaidIntent(text = "") {
 
 function paidInstructionMessage() {
   return (
-    "Ô£à Perfecto. Env├¡ame por favor el *comprobante* (foto o PDF) y estos datos:\n" +
+    "✅ Perfecto. Env├¡ame por favor el *comprobante* (foto o PDF) y estos datos:\n" +
     "- Nombre completo\n" +
     "- Tel├®fono\n" +
     "- Municipio / lugar de residencia\n" +
     "- Cantidad de boletas\n\n" +
-    "Apenas lo recibamos queda *en revisi├│n* y te confirmamos."
+    "Apenas lo recibamos queda *en revisión* y te confirmamos."
   );
 }
 
@@ -636,9 +636,9 @@ function pricingReplyMessage(qty, breakdown) {
   if (packs1) parts.push(`${packs1}├ù(1)`);
 
   return (
-    `Ô£à Para *${qty}* boleta(s), el total es *$${formatCOP(total)} COP*.\n` +
+    `✅ Para *${qty}* boleta(s), el total es *$${formatCOP(total)} COP*.\n` +
     `(Combo: ${parts.join(" + ")})\n` +
-    "┬┐Deseas pagar por *Nequi* o *Daviplata*?"
+    "¿Deseas pagar por *Nequi* o *Daviplata*?"
   );
 }
 
@@ -656,7 +656,7 @@ async function saveConversation({ wa_id, direction, message, ref_id = "" }) {
       },
     });
   } catch (e) {
-    console.warn("ÔÜá´©Å saveConversation fall├│:", e?.message || e);
+    console.warn("⚠️´©Å saveConversation falló:", e?.message || e);
   }
 }
 
@@ -664,7 +664,7 @@ async function saveConversation({ wa_id, direction, message, ref_id = "" }) {
 
 function verifyMetaSignature(req) {
   if (!META_APP_SECRET) {
-    console.error("ÔØî META_APP_SECRET NO configurado. Bloqueando webhook por seguridad.");
+    console.error("❌ META_APP_SECRET NO configurado. Bloqueando webhook por seguridad.");
     return false;
   }
 
@@ -782,7 +782,7 @@ async function updateCell(rangeA1, value) {
 
 async function sendText(to, bodyText, ref_id = "") {
   if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
-    console.warn("ÔÜá´©Å Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID");
+    console.warn("⚠️´©Å Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID");
     return { ok: false };
   }
 
@@ -801,8 +801,8 @@ async function sendText(to, bodyText, ref_id = "") {
   });
 
   const raw = await resp.text();
-  console.log("­ƒôñ WhatsApp send status:", resp.status);
-  console.log("­ƒôñ WhatsApp send raw:", raw);
+  console.log("ƒôñ WhatsApp send status:", resp.status);
+  console.log("ƒôñ WhatsApp send raw:", raw);
 
   // OUT conversations
   await saveConversation({ wa_id: to, direction: "OUT", message: bodyText, ref_id });
@@ -850,8 +850,8 @@ async function sendImageByMediaId(to, mediaId, caption = "") {
   });
 
   const raw = await resp.text();
-  console.log("­ƒôñ WhatsApp send image status:", resp.status);
-  console.log("­ƒôñ WhatsApp send image raw:", raw);
+  console.log("ƒôñ WhatsApp send image status:", resp.status);
+  console.log("ƒôñ WhatsApp send image raw:", raw);
 
   // OUT conversations (nota)
   await saveConversation({
@@ -909,7 +909,7 @@ async function classifyPaymentImage({ mediaId }) {
   const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
 Reglas:
 - COMPROBANTE: recibo de transferencia / dep├│sito, comprobante bancario, Nequi / Daviplata, confirmaci├│n de pago, voucher.
-- PUBLICIDAD: afiche / promoci├│n, banner con premios, precios, n├║meros, logo invitando a comprar.
+- PUBLICIDAD: afiche / promoci├│n, banner con premios, precios, números, logo invitando a comprar.
 Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
   const resp = await openai.responses.create({
@@ -933,7 +933,7 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
     const result = { ...normalized, mimeType };
 
-    console.log("­ƒºá Clasificaci├│n IA:", {
+    console.log("🧠 Clasificaci├│n IA:", {
       mediaId,
       mimeType,
       label: result.label,
@@ -953,7 +953,7 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
         const result = { ...normalized, mimeType };
 
-        console.log("­ƒºá Clasificaci├│n IA (rescatado):", result);
+        console.log("🧠 Clasificaci├│n IA (rescatado):", result);
 
         return result;
 
@@ -1007,7 +1007,7 @@ function memGet(wa_id) {
 async function askOpenAI(wa_id, userText, state = "BOT") {
 
   if (!openai) {
-    return "┬┐Te gustar├¡a participar o conocer precios de boletas?";
+    return "¿Te gustar├¡a participar o conocer precios de boletas?";
   }
 
   const history = memGet(wa_id);
@@ -1020,10 +1020,10 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
         content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
       },
 
-      // ­ƒö╣ Memoria de conversaci├│n
+      // ƒö╣ Memoria de conversación
       ...history,
 
-      // ­ƒö╣ Mensaje actual del usuario
+      // ƒö╣ Mensaje actual del usuario
       {
         role: "user",
         content: userText,
@@ -1032,9 +1032,9 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
   });
 
   const output =
-    (resp.output_text || "").trim() || "┬┐Me repites, por favor?";
+    (resp.output_text || "").trim() || "¿Me repites, por favor?";
 
-  // ­ƒö╣ Guardar memoria (usuario y asistente)
+  // ƒö╣ Guardar memoria (usuario y asistente)
   memPush(wa_id, "user", userText);
   memPush(wa_id, "assistant", output);
 
@@ -1055,12 +1055,12 @@ async function monitorAprobados() {
       const notes = row?.[7];
 
       if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
-        await sendText(wa_id, "Ô£à Tu pago fue aprobado. En breve te enviamos tu boleta. ­ƒÖî");
+        await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta. ƒÖî");
         await updateCell(`H${ i + 1 } `, "NOTIFIED_APROBADO");
       }
     }
   } catch (err) {
-    console.error("ÔØî monitorAprobados:", err);
+    console.error("❌ monitorAprobados:", err);
   }
 }
 
@@ -1129,7 +1129,7 @@ async function telegramDownloadFileBuffer(file_path) {
 
 /* ================= ROUTES ================= */
 
-app.get("/", (req, res) => res.send("OK Ô£à"));
+app.get("/", (req, res) => res.send("OK ✅"));
 
 // Meta verify
 app.get("/webhook", (req, res) => {
@@ -1151,7 +1151,7 @@ app.post("/webhook", async (req, res) => {
     const greeted = await hasGreeted(wa_id);
     if (!greeted) {
       await markGreeted(wa_id);
-      return `­ƒæï Bienvenido a Rifas y Sorteos El Agropecuario!\n\n${replyText}`;
+      return `👋 Bienvenido a Rifas y Sorteos El Agropecuario!\n\n${replyText}`;
     }
     return replyText;
   }
@@ -1167,10 +1167,10 @@ app.post("/webhook", async (req, res) => {
         const obj = JSON.parse(t);
         if (obj?.label) {
           const label = String(obj.label).toUpperCase();
-          if (label === "PUBLICIDAD") return "­ƒôó Esa imagen parece publicidad.";
-          if (label === "COMPROBANTE") return "Ô£à Ese archivo parece un comprobante.";
-          if (label === "OTRO") return "­ƒæÇ Ese archivo no parece un comprobante.";
-          return "­ƒæÇ No logro confirmar si es comprobante. ┬┐Me env├¡as una captura m├ís clara?";
+          if (label === "PUBLICIDAD") return "📢 Esa imagen parece publicidad.";
+          if (label === "COMPROBANTE") return "✅ Ese archivo parece un comprobante.";
+          if (label === "OTRO") return "👀 Ese archivo no parece un comprobante.";
+          return "👀 No logro confirmar si es comprobante. ¿Me env├¡as una captura más clara?";
         }
       } catch {}
     }
@@ -1261,7 +1261,7 @@ if (type === "text") {
   // 🔹 LOG IN (texto recibido)
   await safeConversationLog("IN", wa_id, text);
 
-  // Guardar conversaci├│n (solo una vez por mensaje)
+  // Guardar conversación (solo una vez por mensaje)
   await saveConversation({ wa_id, direction: "IN", message: text });
 
   // Estado global (Sheets) + mini-stage
@@ -1283,7 +1283,7 @@ if (type === "text") {
     ) {
       const reply = await withGreeting(
         wa_id,
-        "­ƒöù Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\nÔ£à Env├¡ame una *captura* donde se vea el *nombre de la p├ígina/perfil* que public├│ el anuncio (arriba del post) o dime el nombre del influencer."
+        "ƒöù Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Env├¡ame una *captura* donde se vea el *nombre de la página/perfil* que public├│ el anuncio (arriba del post) o dime el nombre del influencer."
       );
 
       // 🔹 LOG OUT
@@ -1299,7 +1299,7 @@ if (type === "text") {
     if (t.includes("facebook")) {
       const reply = await withGreeting(
         wa_id,
-        "­ƒôî Si la viste en Facebook, puede ser de nuestra p├ígina o de un colaborador/influencer.\n\nÔ£à Para confirmarte, env├¡ame una *captura* donde se vea el *nombre del perfil/p├ígina* que public├│ el anuncio (arriba del post)."
+        "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que public├│ el anuncio (arriba del post)."
       );
 
       // 🔹 LOG OUT
@@ -1311,18 +1311,18 @@ if (type === "text") {
       return;
     }
 
-    // Si pregunta ÔÇ£es de ustedes / es publicidad / siÔÇØ
+    // Si pregunta “es de ustedes / es publicidad / si”
     if (
       t.includes("es publicidad") ||
       t.includes("si es publicidad") ||
       t.includes("es de ustedes") ||
       t.includes("de ustedes") ||
       t === "si" ||
-      t === "s├¡"
+      t === "sí"
     ) {
       const reply = await withGreeting(
         wa_id,
-        "Ô£à Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, env├¡me una *captura* donde se vea el *nombre del perfil/p├ígina* que lo public├│."
+        "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, env├¡me una *captura* donde se vea el *nombre del perfil/página* que lo public├│."
       );
 
       // 🔹 LOG OUT
@@ -1334,7 +1334,7 @@ if (type === "text") {
       return;
     }
 
-    // Si no fue ├║til, limpiamos contexto y seguimos con IA
+    // Si no fue útil, limpiamos contexto y seguimos con IA
     setLastImageLabel(wa_id, null);
   }
 
@@ -1344,7 +1344,7 @@ if (type === "text") {
   if (state === "EN_REVISION") {
     const reply = await withGreeting(
       wa_id,
-      "­ƒòÆ Tu comprobante est├í en revisi├│n. Te avisamos al aprobarlo."
+      "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
     );
 
     // 🔹 LOG OUT
@@ -1356,15 +1356,15 @@ if (type === "text") {
 
   // ------------------------------------------------------------
   // CAPTURA DURA DE CANTIDAD (evita loops)
-  // Si el usuario manda n├║mero (ej "7" o "quiero 7 boletas"), avanzamos sin IA
+  // Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
   // ------------------------------------------------------------
   const qtyCandidate = tryExtractBoletasQty(text);
 
-  // Si estamos esperando cantidad, o si el texto menciona boletas + n├║mero
+  // Si estamos esperando cantidad, o si el texto menciona boletas + número
   if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
     const qty = qtyCandidate;
 
-    // Si tu funci├│n ya soporta cualquier n├║mero, ├║sala:
+    // Si tu funci├│n ya soporta cualquier número, ├║sala:
     // const breakdown = calcTotalCOPForBoletas(qty);
 
     // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
@@ -1373,7 +1373,7 @@ if (type === "text") {
     if (!breakdown) {
       const replyErr = await withGreeting(
         wa_id,
-        "No entend├¡ la cantidad. Env├¡ame solo el n├║mero de boletas (ej: 1, 2, 5, 7, 10)."
+        "No entendí la cantidad. Env├¡ame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
       );
 
       // 🔹 LOG OUT
@@ -1385,13 +1385,13 @@ if (type === "text") {
 
     await setConversationStage(wa_id, "PRICE_GIVEN");
 
-    // Ô£à Guardar el ├║ltimo c├ílculo para usarlo cuando el usuario diga "nequi" o "daviplata"
+    // ✅ Guardar el ├║ltimo c├ílculo para usarlo cuando el usuario diga "nequi" o "daviplata"
     lastPriceQuote.set(wa_id, breakdown);
 
     const reply = await withGreeting(
       wa_id,
       pricingReplyMessage(qty, breakdown) +
-      "\n\nÔ£à ┬┐Deseas pagar por Nequi o Daviplata?"
+      "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
     );
 
     // 🔹 LOG OUT
@@ -1401,22 +1401,22 @@ if (type === "text") {
     return;
   }
 
-  // Ô£à Si ya dimos precio y el usuario eligi├│ m├®todo, respondemos m├®todo sin volver a preguntar cantidad
+  // ✅ Si ya dimos precio y el usuario eligi├│ método, respondemos método sin volver a preguntar cantidad
   if (stage === "PRICE_GIVEN") {
     const tt = t.toLowerCase();
 
     if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
       const quote = lastPriceQuote.get(wa_id);
 
-      // (opcional) si no hay quote, igual respondemos m├®todo sin inventar total
+      // (opcional) si no hay quote, igual respondemos método sin inventar total
       const resumen = quote?.total
-        ? `Ô£à Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
+        ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
         : "";
 
       if (tt.includes("nequi")) {
         const reply = await withGreeting(
           wa_id,
-          `${resumen}­ƒô▓ Paga por *Nequi* al n├║mero *3223146142*.\nLuego env├¡ame el comprobante + tu nombre completo + municipio + celular.`
+          `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
         );
 
         // 🔹 LOG OUT
@@ -1429,7 +1429,7 @@ if (type === "text") {
       // daviplata
       const reply = await withGreeting(
         wa_id,
-        `${resumen}­ƒô▓ Paga por *Daviplata* al n├║mero *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego env├¡ame el comprobante + tu nombre completo + municipio + celular.`
+        `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
       );
 
       // 🔹 LOG OUT
@@ -1472,19 +1472,19 @@ if (type === "image") {
   try {
     cls = await classifyPaymentImage({ mediaId });
   } catch (e) {
-    console.warn("ÔÜá Clasificaci├│n fall├│, contin├║o como DUDA:", e?.message || e);
+    console.warn("⚠️ Clasificaci├│n falló, continúo como DUDA:", e?.message || e);
 
     // 🔹 LOG OUT (solo monitoreo)
     await safeConversationLog("OUT", wa_id, `⚠️ Error clasificando imagen: ${String(e?.message || e).slice(0, 300)}`);
   }
 
   setLastImageLabel(wa_id, cls.label);
-  console.log("­ƒºá Clasificaci├│n imagen:", cls);
+  console.log("🧠 Clasificaci├│n imagen:", cls);
 
   if (cls.label === "PUBLICIDAD") {
     const reply = await withGreeting(
       wa_id,
-      "­ƒôó Esa imagen es publicidad.\n\nsi es nuestra publicidad."
+      "📢 Esa imagen es publicidad.\n\nsi es nuestra publicidad."
     );
 
     // 🔹 LOG OUT
@@ -1497,7 +1497,7 @@ if (type === "image") {
   if (cls.label !== "COMPROBANTE") {
     const reply = await withGreeting(
       wa_id,
-      "­ƒæÇ No logro confirmar si es un comprobante.\nPor favor env├¡ame una captura clara del recibo de pago."
+      "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
     );
 
     // 🔹 LOG OUT
@@ -1507,7 +1507,7 @@ if (type === "image") {
     return;
   }
 
-  // Ô£à Aqu├¡ crear referencia si es comprobante
+  // ✅ Aqu├¡ crear referencia si es comprobante
   const { ref } = await createReference({
     wa_id,
     last_msg_type: "image",
@@ -1517,7 +1517,7 @@ if (type === "image") {
 
   const reply = await withGreeting(
     wa_id,
-    `Ô£à Comprobante recibido.\n\n­ƒôî Referencia de pago: ${ref}\n\nTu pago est├í en revisi├│n.`
+    `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago está en revisión.`
   );
 
   // 🔹 LOG OUT
@@ -1538,7 +1538,7 @@ if (type === "document") {
 
   const reply = await withGreeting(
     wa_id,
-    "­ƒôä Recib├¡ un documento. Por favor env├¡ame el comprobante como *imagen/captura* para procesarlo m├ís r├ípido."
+    "📄 Recibí un documento. Por favor envíame el comprobante como *imagen/captura* para procesarlo más rápido."
   );
 
   // 🔹 LOG OUT
@@ -1554,7 +1554,7 @@ await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` }
 
 const reply = await withGreeting(
   wa_id,
-  "Ô£à Recibido. Por favor env├¡ame un mensaje de texto o una imagen del comprobante para ayudarte."
+  "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
 );
 
 // 🔹 LOG OUT
@@ -1562,7 +1562,7 @@ await safeConversationLog("OUT", wa_id, reply);
 
 await sendText(wa_id, reply);
 } catch (e) {
-  console.error("ÔØî /webhook error:", e?.message || e);
+  console.error("❌ /webhook error:", e?.message || e);
 
   // 🔹 LOG OUT (solo monitoreo)
   await safeConversationLog("OUT", wa_id, `🚨 /webhook error: ${String(e?.message || e).slice(0, 500)}`);
@@ -1573,7 +1573,7 @@ await sendText(wa_id, reply);
 app.post("/telegram-webhook", async (req, res) => {
   try {
     if (!TELEGRAM_SECRET_TOKEN) {
-      console.error("ÔØî TELEGRAM_SECRET_TOKEN no est├í configurado (obligatorio).");
+      console.error("❌ TELEGRAM_SECRET_TOKEN no está configurado (obligatorio).");
       return res.sendStatus(500);
     }
     const incoming = req.headers["x-telegram-bot-api-secret-token"];
@@ -1598,22 +1598,22 @@ app.post("/telegram-webhook", async (req, res) => {
     const ref = extractRef(caption);
 
     if (!file_id) {
-      if (chat_id) await telegramSendMessage(chat_id, "ÔÜá´©Å Debes enviar una *foto* de la boleta.");
+      if (chat_id) await telegramSendMessage(chat_id, "⚠️´©Å Debes enviar una *foto* de la boleta.");
       return;
     }
     if (!ref) {
-      if (chat_id) await telegramSendMessage(chat_id, "ÔÜá´©Å Falta la referencia en el caption. Ej: RP-240224-001");
+      if (chat_id) await telegramSendMessage(chat_id, "⚠️´©Å Falta la referencia en el caption. Ej: RP-240224-001");
       return;
     }
 
     const found = await findRowByRef(ref);
     if (!found) {
-      if (chat_id) await telegramSendMessage(chat_id, `ÔØî No encontr├® esa referencia en la hoja: ${ref}`);
+      if (chat_id) await telegramSendMessage(chat_id, `❌ No encontr├® esa referencia en la hoja: ${ref}`);
       return;
     }
 
     if (found.state !== "APROBADO" && found.state !== "BOLETA_ENVIADA") {
-      if (chat_id) await telegramSendMessage(chat_id, `ÔÜá´©Å La referencia ${ref} est├í en estado: ${found.state}. Primero debe estar APROBADO.`);
+      if (chat_id) await telegramSendMessage(chat_id, `⚠️´©Å La referencia ${ref} está en estado: ${found.state}. Primero debe estar APROBADO.`);
       return;
     }
 
@@ -1621,15 +1621,15 @@ app.post("/telegram-webhook", async (req, res) => {
     const imgBuffer = await telegramDownloadFileBuffer(file_path);
 
     const mediaId = await whatsappUploadImageBuffer(imgBuffer, "image/jpeg");
-    await sendImageByMediaId(found.wa_id, mediaId, `­ƒÄƒ´©Å Boleta enviada Ô£à (${ref})`);
+    await sendImageByMediaId(found.wa_id, mediaId, `ƒÄƒ´©Å Boleta enviada ✅ (${ref})`);
 
     if (found.state !== "BOLETA_ENVIADA") {
       await updateCell(`D${found.rowNumber}`, "BOLETA_ENVIADA");
     }
 
-    if (chat_id) await telegramSendMessage(chat_id, `Ô£à Envi├® la boleta al cliente (${found.wa_id}) y marqu├® BOLETA_ENVIADA. (${ref})`);
+    if (chat_id) await telegramSendMessage(chat_id, `✅ Envi├® la boleta al cliente (${found.wa_id}) y marqu├® BOLETA_ENVIADA. (${ref})`);
   } catch (err) {
-    console.error("ÔØî /telegram-webhook error:", err);
+    console.error("❌ /telegram-webhook error:", err);
   }
 });
 
@@ -1639,5 +1639,5 @@ setInterval(monitorAprobados, 30000);
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`­ƒÜÇ Servidor corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });
