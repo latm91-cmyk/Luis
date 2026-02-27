@@ -1418,107 +1418,228 @@ await sendText(wa_id, replyAI);
 return;
 }
 
-    // =========================
-    // IMAGE (filtro publicidad vs comprobante)
-    // =========================
-        if (type === "image") {
-    await sendConversationLog("IN", wa_id, "[image] recibido");
-          // PUBLICIDAD
-if (cls.label === "PUBLICIDAD") {
-  const reply = await withGreeting(
-    wa_id,
-    "📢 Esa imagen es publicidad."
-  );
-  await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
-  return;
+   /* ================= OPENAI VISION: PUBLICIDAD vs COMPROBANTE ================= */
+
+async function fetchWhatsAppMediaUrl(mediaId) {
+  const resp = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!data?.url) throw new Error("No media url from Meta: " + JSON.stringify(data));
+  return data.url;
 }
 
-// NO ES COMPROBANTE
-if (cls.label !== "COMPROBANTE") {
-  const reply = await withGreeting(
-    wa_id,
-    "👀 No logro confirmar si es un comprobante.\nPor favor envíame una imagen clara del pago."
-  );
- await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
-  return;
+async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
+  const r = await axios.get(mediaUrl, {
+    responseType: "arraybuffer",
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+  });
+
+  const mimeType =
+    (r.headers?.["content-type"] || r.headers?.["Content-Type"] || "")
+      .split(";")[0]
+      .trim();
+
+  return {
+    buf: Buffer.from(r.data),
+    mimeType: mimeType || "image/jpeg",
+  };
 }
 
-// ✅ AQUI ES COMPROBANTE
-
-// 1️⃣ Crear caption Telegram
-const caption =
-`🧾 NUEVO COMPROBANTE
-📱 Cliente: ${wa_id}
-
-Revisar y aprobar en sistema.`;
-
-// 2️⃣ Enviar al grupo Telegram
-await sendTelegramPhoto(buf, caption);
-
-// 3️⃣ Crear referencia
-const { ref } = await createReference({
-  wa_id,
-  last_msg_type: "image",
-  receipt_media_id: mediaId,
-  receipt_is_payment: "YES",
-});
-
-// 4️⃣ Responder al cliente
-let reply = await withGreeting(
-  wa_id,
-  `✅ Comprobante recibido.\n\n📌 Referencia: ${ref}\nTe avisaremos cuando sea aprobado.`
-);
-
-await sendText(wa_id, reply, ref);
-return;
-    }
-
-    // =========================    // DOCUMENT: pedir imagen     // =========================
-    
-if (type === "document") {
-  await saveConversation({ wa_id, direction: "IN", message: "[document] recibido" });
-
-  const reply = await withGreeting(
-    wa_id,
-    "📄 Recibí un documento. Por favor envíame el comprobante como imagen."
-  );
-
-  await sendConversationLog("OUT", wa_id, reply);
-  await sendText(wa_id, reply);
-  return;
+function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
+  const b64 = buffer.toString("base64");
+  return `data:${mimeType};base64,${b64}`;
 }
 
-// =========================
-// OTROS TIPOS
-// =========================
-await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
+async function classifyPaymentImage({ mediaId }) {
+  if (!openai)
+    return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
 
-const reply = await withGreeting(
-  wa_id,
-  "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante."
-);
+  const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
+  const { buf, mimeType } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
+  const dataUrl = bufferToDataUrl(buf, mimeType);
 
-await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
-return;
+  const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
+Reglas:
+- COMPROBANTE: recibo de transferencia / depósito, comprobante bancario, Nequi / Daviplata, confirmación de pago, voucher.
+- PUBLICIDAD: afiche / promoción, banner con premios, precios, números, logo invitando a comprar.
+Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
-} catch (e) {
-  console.error("❌ /webhook error:", e?.message || e);
+  const resp = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: prompt },
+          { type: "input_image", image_url: dataUrl },
+        ],
+      },
+    ],
+  });
+
+  const out = (resp.output_text || "").trim();
 
   try {
-    await telegramSendMessage(
-      process.env.TELEGRAM_CHAT_ID,
-      `🚨 ALERTA ASESOR
-📱 Cliente: ${typeof wa_id !== "undefined" ? wa_id : "desconocido"}
-🧨 Error: ${String(e?.message || e).slice(0, 500)}`
-    );
-  } catch (e2) {
-    console.error("❌ No pude enviar alerta a Telegram:", e2?.message || e2);
+    const parsed = JSON.parse(out);
+    const normalized = normalize(parsed);
+
+    const result = { ...normalized, mimeType };
+
+    console.log("🧠 Clasificación IA:", {
+      mediaId,
+      mimeType,
+      label: result.label,
+      confidence: result.confidence,
+      why: result.why,
+    });
+
+    return result;
+
+  } catch {
+    const m = out.match(/\{[\s\S]*\}/);
+
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        const normalized = normalize(parsed);
+
+        const result = { ...normalized, mimeType };
+
+        console.log("🧠 Clasificación IA (rescatado):", result);
+
+        return result;
+
+      } catch {}
+    }
+
+    return {
+      label: "DUDA",
+      confidence: 0,
+      why: "No JSON: " + out.slice(0, 200),
+    };
   }
 }
-}); 
+
+function normalize(parsed) {
+  return {
+    label: String(parsed.label || "DUDA").toUpperCase(),
+    confidence: Number(parsed.confidence ?? 0),
+    why: parsed.why || "",
+  };
+}
+/* ================= OPENAI VISION: PUBLICIDAD vs COMPROBANTE ================= */
+
+async function fetchWhatsAppMediaUrl(mediaId) {
+  const resp = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!data?.url) throw new Error("No media url from Meta: " + JSON.stringify(data));
+  return data.url;
+}
+
+async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
+  const r = await axios.get(mediaUrl, {
+    responseType: "arraybuffer",
+    headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
+  });
+
+  const mimeType =
+    (r.headers?.["content-type"] || r.headers?.["Content-Type"] || "")
+      .split(";")[0]
+      .trim();
+
+  return {
+    buf: Buffer.from(r.data),
+    mimeType: mimeType || "image/jpeg",
+  };
+}
+
+function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
+  const b64 = buffer.toString("base64");
+  return `data:${mimeType};base64,${b64}`;
+}
+
+async function classifyPaymentImage({ mediaId }) {
+  if (!openai)
+    return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
+
+  const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
+  const { buf, mimeType } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
+  const dataUrl = bufferToDataUrl(buf, mimeType);
+
+  const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
+Reglas:
+- COMPROBANTE: recibo de transferencia / depósito, comprobante bancario, Nequi / Daviplata, confirmación de pago, voucher.
+- PUBLICIDAD: afiche / promoción, banner con premios, precios, números, logo invitando a comprar.
+Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
+
+  const resp = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: prompt },
+          { type: "input_image", image_url: dataUrl },
+        ],
+      },
+    ],
+  });
+
+  const out = (resp.output_text || "").trim();
+
+  try {
+    const parsed = JSON.parse(out);
+    const normalized = normalize(parsed);
+
+    const result = { ...normalized, mimeType };
+
+    console.log("🧠 Clasificación IA:", {
+      mediaId,
+      mimeType,
+      label: result.label,
+      confidence: result.confidence,
+      why: result.why,
+    });
+
+    return result;
+
+  } catch {
+    const m = out.match(/\{[\s\S]*\}/);
+
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        const normalized = normalize(parsed);
+
+        const result = { ...normalized, mimeType };
+
+        console.log("🧠 Clasificación IA (rescatado):", result);
+
+        return result;
+
+      } catch {}
+    }
+
+    return {
+      label: "DUDA",
+      confidence: 0,
+      why: "No JSON: " + out.slice(0, 200),
+    };
+  }
+}
+
+function normalize(parsed) {
+  return {
+    label: String(parsed.label || "DUDA").toUpperCase(),
+    confidence: Number(parsed.confidence ?? 0),
+    why: parsed.why || "",
+  };
+}
 
 // <-- SOLO AQUÍ se cierra el webhook
 
