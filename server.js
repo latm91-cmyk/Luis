@@ -42,6 +42,7 @@ const META_APP_SECRET = process.env.META_APP_SECRET; // OBLIGATORIO
 // Telegram
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_SECRET_TOKEN = process.env.TELEGRAM_SECRET_TOKEN || ""; // OBLIGATORIO
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
 // OpenAI
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -1082,6 +1083,23 @@ async function telegramSendMessage(chat_id, text) {
   });
 }
 
+async function telegramSendPhotoBuffer(chat_id, buffer, caption = "") {
+  if (!TELEGRAM_BOT_TOKEN || !chat_id) return;
+
+  const form = new FormData();
+  form.append("chat_id", String(chat_id));
+  if (caption) form.append("caption", caption);
+  form.append("photo", buffer, { filename: "comprobante.jpg" });
+
+  const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+    method: "POST",
+    body: form,
+  });
+
+  const data = await r.json().catch(() => ({}));
+  if (!data?.ok) throw new Error("Telegram sendPhoto failed: " + JSON.stringify(data));
+}
+
 // =========================
 // TELEGRAM: Conversation Log
 // =========================
@@ -1528,6 +1546,21 @@ if (type === "image") {
     receipt_media_id: mediaId,
     receipt_is_payment: "YES",
   });
+
+  // ✅ Enviar comprobante a Telegram (grupo de comprobantes)
+try {
+  const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
+  const { buf } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
+
+  const caption = `🧾 NUEVO COMPROBANTE
+📱 Cliente: ${wa_id}
+📌 Referencia: ${ref}
+✅ Revisar y aprobar.`;
+
+  await telegramSendPhotoBuffer(TELEGRAM_CHAT_ID, buf, caption);
+} catch (e) {
+  console.error("❌ No pude enviar comprobante a Telegram:", e?.message || e);
+}
 
   const reply = await withGreeting(
     wa_id,
