@@ -1169,8 +1169,6 @@ app.post("/webhook", async (req, res) => {
     return cleanText;
   }
 
-    return replyText;
-  }
 
   // Helper: si por error la IA devuelve JSON, lo convertimos a texto humano
   function humanizeIfJson(text) {
