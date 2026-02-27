@@ -298,6 +298,16 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
 
 /* ================= HELPERS ================= */
 
+code server.jsasync function safeConversationLog(direction, wa_id, message) {
+  try {
+    if (typeof sendConversationLog === "function") {
+      await sendConversationLog(direction, wa_id, message);
+    }
+  } catch (e) {
+    console.warn("⚠️ sendConversationLog falló:", e?.message || e);
+  }
+}
+
 async function sendTelegramPhoto(buffer, caption = "") {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -1293,180 +1303,197 @@ app.post("/webhook", async (req, res) => {
     }
 
     // =========
-    // TEXT
-    // =========
-    if (type === "text") {
-      const text = (msg.text?.body || "").trim();
-      const t = text.toLowerCase();
+// TEXT
+// =========
+if (type === "text") {
+  const text = (msg.text?.body || "").trim();
+  const t = text.toLowerCase();
 
-      // 🔹 LOG AL GRUPO DE CONVERSACIÓN
-      await sendConversationLog("IN", wa_id, text);
+  // 🔹 LOG AL GRUPO DE CONVERSACIÓN
+  await safeConversationLog("IN", wa_id, text);
 
-      // Guardar conversación
-      await saveConversation({ wa_id, direction: "IN", message: text });
+  // Guardar conversación
+  await saveConversation({ wa_id, direction: "IN", message: text });
 
-      // Estado global (Sheets) + mini-stage
-      const state = await getLatestStateByWaId(wa_id);
-      const stage = await getConversationStage(wa_id);
+  // Estado global (Sheets) + mini-stage
+  const state = await getLatestStateByWaId(wa_id);
+  const stage = await getConversationStage(wa_id);
 
-      const lastLabel = getLastImageLabel(wa_id);
+  const lastLabel = getLastImageLabel(wa_id);
 
-      // ------------------------------------------------------------
-      // 1) CONTEXTO: si venimos de una imagen clasificada como PUBLICIDAD
-      // ------------------------------------------------------------
-      if (lastLabel === "PUBLICIDAD") {
-        // Si envía link: NO confirmamos por link. Pedimos captura/nombre del perfil.
-        if (
-          t.includes("http") ||
-          t.includes("facebook.com") ||
-          t.includes("instagram.com") ||
-          t.includes("tiktok.com")
-        ) {
-          const reply = await withGreeting(
-            wa_id,
-            "🔗 Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la página/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
-          );
-          await sendText(wa_id, reply);
+  // ------------------------------------------------------------
+  // 1) CONTEXTO: si venimos de una imagen clasificada como PUBLICIDAD
+  // ------------------------------------------------------------
+  if (lastLabel === "PUBLICIDAD") {
+    // Si envía link: NO confirmamos por link. Pedimos captura/nombre del perfil.
+    if (
+      t.includes("http") ||
+      t.includes("facebook.com") ||
+      t.includes("instagram.com") ||
+      t.includes("tiktok.com")
+    ) {
+      const reply = await withGreeting(
+        wa_id,
+        "🔗 Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la página/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
+      );
 
-          setLastImageLabel(wa_id, null);
-          return;
-        }
+      await safeConversationLog("OUT", wa_id, reply);
+      await sendText(wa_id, reply);
 
-        // Si menciona Facebook (sin link)
-        if (t.includes("facebook")) {
-          const reply = await withGreeting(
-            wa_id,
-            "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que publicó el anuncio (arriba del post)."
-          );
-          await sendConversationLog("OUT", wa_id, reply);
-          await sendText(wa_id, reply);
-
-          setLastImageLabel(wa_id, null);
-          return;
-        }
-
-        // Si pregunta “es de ustedes / es publicidad / si”
-        if (
-          t.includes("es publicidad") ||
-          t.includes("si es publicidad") ||
-          t.includes("es de ustedes") ||
-          t.includes("de ustedes") ||
-          t === "si" ||
-          t === "sí"
-        ) {
-          const reply = await withGreeting(
-            wa_id,
-            "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, envíame una *captura* donde se vea el *nombre del perfil/página* que lo publicó."
-          );
-          await sendConversationLog("OUT", wa_id, reply);
-          await sendText(wa_id, reply);
-
-          setLastImageLabel(wa_id, null);
-          return;
-        }
-
-        // Si no fue útil, limpiamos contexto y seguimos con IA
-        setLastImageLabel(wa_id, null);
-      }
-
-      // ------------------------------------------------------------
-      // 2) GUARDARRÍL: EN_REVISION siempre gana
-      // ------------------------------------------------------------
-      if (state === "EN_REVISION") {
-        const reply = await withGreeting(
-          wa_id,
-          "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
-        );
-        await sendConversationLog("OUT", wa_id, reply);
-        await sendText(wa_id, reply);
-        return;
-      }
-
-      // ------------------------------------------------------------
-      // CAPTURA DURA DE CANTIDAD (evita loops)
-      // Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
-      // ------------------------------------------------------------
-      const qtyCandidate = tryExtractBoletasQty(text);
-
-      // Si estamos esperando cantidad, o si el texto menciona boletas + número
-      if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
-        const qty = qtyCandidate;
-
-        // Si tu función ya soporta cualquier número, úsala:
-        // const breakdown = calcTotalCOPForBoletas(qty);
-
-        // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
-        const breakdown = calcTotalCOPForBoletas(qty);
-
-        if (!breakdown) {
-          const replyErr = await withGreeting(
-            wa_id,
-            "No entendí la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
-          );
-          await sendText(wa_id, replyErr);
-          return;
-        }
-
-        await setConversationStage(wa_id, "PRICE_GIVEN");
-
-        // ✅ Guardar el último cálculo para usarlo cuando el usuario diga "nequi" o "daviplata"
-        lastPriceQuote.set(wa_id, breakdown);
-
-        const reply = await withGreeting(
-          wa_id,
-          pricingReplyMessage(qty, breakdown) +
-          "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
-        );
-
-        await sendConversationLog("OUT", wa_id, reply);
-        await sendText(wa_id, reply);
-        return;
-      }
-
-      // ✅ Si ya dimos precio y el usuario eligió método, respondemos método sin volver a preguntar cantidad
-      if (stage === "PRICE_GIVEN") {
-        const tt = t.toLowerCase();
-
-        if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
-          const quote = lastPriceQuote.get(wa_id);
-
-          // (opcional) si no hay quote, igual respondemos método sin inventar total
-          const resumen = quote?.total
-            ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
-            : "";
-
-          if (tt.includes("nequi")) {
-            const reply = await withGreeting(
-              wa_id,
-              `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
-            );
-            await sendConversationLog("OUT", wa_id, reply);
-            await sendText(wa_id, reply);
-            return;
-          }
-
-          // daviplata
-          const reply = await withGreeting(
-            wa_id,
-            `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
-          );
-          await sendConversationLog("OUT", wa_id, reply);
-          await sendText(wa_id, reply);
-          return;
-        }
-      }
-
-      // ------------------------------------------------------------
-      // 5) TODO LO DEMÁS: IA (tu prompt manda)
-      //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
-      // ------------------------------------------------------------
-      const aiReplyRaw = await askOpenAIM(wa_id, text, state);
-      const aiReply = humanizeIfJson(aiReplyRaw);
-
-      const replyAI = await withGreeting(wa_id, aiReply);
-      await sendText(wa_id, replyAI);
+      setLastImageLabel(wa_id, null);
       return;
     }
+
+    // Si menciona Facebook (sin link)
+    if (t.includes("facebook")) {
+      const reply = await withGreeting(
+        wa_id,
+        "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que publicó el anuncio (arriba del post)."
+      );
+
+      await safeConversationLog("OUT", wa_id, reply);
+      await sendText(wa_id, reply);
+
+      setLastImageLabel(wa_id, null);
+      return;
+    }
+
+    // Si pregunta “es de ustedes / es publicidad / si”
+    if (
+      t.includes("es publicidad") ||
+      t.includes("si es publicidad") ||
+      t.includes("es de ustedes") ||
+      t.includes("de ustedes") ||
+      t === "si" ||
+      t === "sí"
+    ) {
+      const reply = await withGreeting(
+        wa_id,
+        "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, envíame una *captura* donde se vea el *nombre del perfil/página* que lo publicó."
+      );
+
+      await safeConversationLog("OUT", wa_id, reply);
+      await sendText(wa_id, reply);
+
+      setLastImageLabel(wa_id, null);
+      return;
+    }
+
+    // Si no fue útil, limpiamos contexto y seguimos con IA
+    setLastImageLabel(wa_id, null);
+  }
+
+  // ------------------------------------------------------------
+  // 2) GUARDARRÍL: EN_REVISION siempre gana
+  // ------------------------------------------------------------
+  if (state === "EN_REVISION") {
+    const reply = await withGreeting(
+      wa_id,
+      "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
+    );
+
+    await safeConversationLog("OUT", wa_id, reply);
+    await sendText(wa_id, reply);
+
+    return;
+  }
+
+  // ------------------------------------------------------------
+  // CAPTURA DURA DE CANTIDAD (evita loops)
+  // Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
+  // ------------------------------------------------------------
+  const qtyCandidate = tryExtractBoletasQty(text);
+
+  // Si estamos esperando cantidad, o si el texto menciona boletas + número
+  if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
+    const qty = qtyCandidate;
+
+    // Si tu función ya soporta cualquier número, úsala:
+    // const breakdown = calcTotalCOPForBoletas(qty);
+
+    // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
+    const breakdown = calcTotalCOPForBoletas(qty);
+
+    if (!breakdown) {
+      const replyErr = await withGreeting(
+        wa_id,
+        "No entendí la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
+      );
+
+      await safeConversationLog("OUT", wa_id, replyErr);
+      await sendText(wa_id, replyErr);
+
+      return;
+    }
+
+    await setConversationStage(wa_id, "PRICE_GIVEN");
+
+    // ✅ Guardar el último cálculo para usarlo cuando el usuario diga "nequi" o "daviplata"
+    lastPriceQuote.set(wa_id, breakdown);
+
+    const reply = await withGreeting(
+      wa_id,
+      pricingReplyMessage(qty, breakdown) +
+      "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
+    );
+
+    await safeConversationLog("OUT", wa_id, reply);
+    await sendText(wa_id, reply);
+
+    return;
+  }
+
+  // ✅ Si ya dimos precio y el usuario eligió método, respondemos método sin volver a preguntar cantidad
+  if (stage === "PRICE_GIVEN") {
+    const tt = t.toLowerCase();
+
+    if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
+      const quote = lastPriceQuote.get(wa_id);
+
+      // (opcional) si no hay quote, igual respondemos método sin inventar total
+      const resumen = quote?.total
+        ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
+        : "";
+
+      if (tt.includes("nequi")) {
+        const reply = await withGreeting(
+          wa_id,
+          `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+        );
+
+        await safeConversationLog("OUT", wa_id, reply);
+        await sendText(wa_id, reply);
+
+        return;
+      }
+
+      // daviplata
+      const reply = await withGreeting(
+        wa_id,
+        `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+      );
+
+      await safeConversationLog("OUT", wa_id, reply);
+      await sendText(wa_id, reply);
+
+      return;
+    }
+  }
+
+  // ------------------------------------------------------------
+  // 5) TODO LO DEMÁS: IA (tu prompt manda)
+  //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
+  // ------------------------------------------------------------
+  const aiReplyRaw = await askOpenAIM(wa_id, text, state);
+  const aiReply = humanizeIfJson(aiReplyRaw);
+
+  const replyAI = await withGreeting(wa_id, aiReply);
+
+  await safeConversationLog("OUT", wa_id, replyAI);
+  await sendText(wa_id, replyAI);
+
+  return;
+}
 
     // <-- SOLO AQUÍ se cierra el webhook
 
