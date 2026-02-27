@@ -1080,6 +1080,37 @@ async function telegramSendMessage(chat_id, text) {
   });
 }
 
+// =========================
+// TELEGRAM: Conversation Log
+// =========================
+async function sendConversationLog(direction, wa_id, message) {
+  const groupId = process.env.TELEGRAM_GROUP_ID;
+  if (!groupId || !TELEGRAM_BOT_TOKEN) return;
+
+  const prefix = direction === "IN" ? "📩 IN" : "📤 OUT";
+  const safeWa = wa_id || "desconocido";
+
+  // Evita mensajes gigantes
+  const text = String(message ?? "").slice(0, 3500);
+
+  // Si quieres: hora Colombia
+  const ts = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
+
+  await telegramSendMessage(
+    groupId,
+    `${prefix} | ${ts}\n👤 ${safeWa}\n📝 ${text}`
+  );
+}
+
+// Para que Telegram nunca tumbe tu webhook si falla
+async function safeConversationLog(direction, wa_id, message) {
+  try {
+    await sendConversationLog(direction, wa_id, message);
+  } catch (e) {
+    console.warn("⚠️ sendConversationLog falló:", e?.message || e);
+  }
+}
+
 async function telegramGetFilePath(file_id) {
   const r = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(file_id)}`
@@ -1163,48 +1194,72 @@ app.post("/webhook", async (req, res) => {
     await touchSession(wa_id);
 
     // =========================
-    // AUDIO (nota de voz / audio)
-    // =========================
-    if (type === "audio") {
-      const mediaId = msg.audio?.id;
+// AUDIO (nota de voz / audio)
+// =========================
+if (type === "audio") {
+  const mediaId = msg.audio?.id;
 
-      await saveConversation({ wa_id, direction: "IN", message: "[audio] recibido" });
+  // 🔹 LOG IN (audio recibido)
+  await safeConversationLog("IN", wa_id, "[audio] recibido");
 
-      if (!mediaId) {
-        const reply = await withGreeting(
-          wa_id,
-          "­ƒÄñ Recib├¡ tu audio, pero no pude leerlo. Intenta enviarlo otra vez."
-        );
-        await sendText(wa_id, reply);
-        return;
-      }
+  await saveConversation({ wa_id, direction: "IN", message: "[audio] recibido" });
 
-      try {
-        const text = await transcribeWhatsAppAudio(mediaId);
-        const state = await getLatestStateByWaId(wa_id);
-        const stage = await getConversationStage(wa_id);
-        const aiReplyRaw = await askOpenAI(wa_id, text, state);
-        const aiReply = humanizeIfJson(aiReplyRaw);
+  if (!mediaId) {
+    const reply = await withGreeting(
+      wa_id,
+      "🎤 Recibí tu audio, pero no pude leerlo. Intenta enviarlo otra vez."
+    );
 
-        const reply = await withGreeting(wa_id, aiReply);
-        await sendText(wa_id, reply);
-      } catch (e) {
-        console.warn("Audio transcripci├│n fall├│:", e?.message || e);
-        const reply = await withGreeting(
-          wa_id,
-          "­ƒÄñ Recib├¡ tu audio, pero no pude entenderlo. ┬┐Me lo escribes por texto, por favor?"
-        );
-        await sendText(wa_id, reply);
-      }
-      return;
-    }
+    // 🔹 LOG OUT
+    await safeConversationLog("OUT", wa_id, reply);
 
-    // =========
+    await sendText(wa_id, reply);
+    return;
+  }
+
+  try {
+    const text = await transcribeWhatsAppAudio(mediaId);
+
+    // 🔹 LOG IN (texto transcrito)
+    await safeConversationLog("IN", wa_id, `[audio transcrito]: ${text}`);
+
+    const state = await getLatestStateByWaId(wa_id);
+    const stage = await getConversationStage(wa_id);
+    const aiReplyRaw = await askOpenAI(wa_id, text, state);
+    const aiReply = humanizeIfJson(aiReplyRaw);
+
+    const reply = await withGreeting(wa_id, aiReply);
+
+    // 🔹 LOG OUT (respuesta IA)
+    await safeConversationLog("OUT", wa_id, reply);
+
+    await sendText(wa_id, reply);
+  } catch (e) {
+    console.warn("Audio transcripción falló:", e?.message || e);
+
+    const reply = await withGreeting(
+      wa_id,
+      "🎤 Recibí tu audio, pero no pude entenderlo. ¿Me lo escribes por texto, por favor?"
+    );
+
+    // 🔹 LOG OUT (error respuesta)
+    await safeConversationLog("OUT", wa_id, reply);
+
+    await sendText(wa_id, reply);
+  }
+
+  return;
+}
+
+ // =========
 // TEXT
 // =========
 if (type === "text") {
   const text = (msg.text?.body || "").trim();
   const t = text.toLowerCase();
+
+  // 🔹 LOG IN (texto recibido)
+  await safeConversationLog("IN", wa_id, text);
 
   // Guardar conversaci├│n (solo una vez por mensaje)
   await saveConversation({ wa_id, direction: "IN", message: text });
@@ -1230,6 +1285,10 @@ if (type === "text") {
         wa_id,
         "­ƒöù Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\nÔ£à Env├¡ame una *captura* donde se vea el *nombre de la p├ígina/perfil* que public├│ el anuncio (arriba del post) o dime el nombre del influencer."
       );
+
+      // 🔹 LOG OUT
+      await safeConversationLog("OUT", wa_id, reply);
+
       await sendText(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
@@ -1242,6 +1301,10 @@ if (type === "text") {
         wa_id,
         "­ƒôî Si la viste en Facebook, puede ser de nuestra p├ígina o de un colaborador/influencer.\n\nÔ£à Para confirmarte, env├¡ame una *captura* donde se vea el *nombre del perfil/p├ígina* que public├│ el anuncio (arriba del post)."
       );
+
+      // 🔹 LOG OUT
+      await safeConversationLog("OUT", wa_id, reply);
+
       await sendText(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
@@ -1259,8 +1322,12 @@ if (type === "text") {
     ) {
       const reply = await withGreeting(
         wa_id,
-        "Ô£à Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, env├¡ame una *captura* donde se vea el *nombre del perfil/p├ígina* que lo public├│."
+        "Ô£à Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, env├¡me una *captura* donde se vea el *nombre del perfil/p├ígina* que lo public├│."
       );
+
+      // 🔹 LOG OUT
+      await safeConversationLog("OUT", wa_id, reply);
+
       await sendText(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
@@ -1279,82 +1346,101 @@ if (type === "text") {
       wa_id,
       "­ƒòÆ Tu comprobante est├í en revisi├│n. Te avisamos al aprobarlo."
     );
+
+    // 🔹 LOG OUT
+    await safeConversationLog("OUT", wa_id, reply);
+
     await sendText(wa_id, reply);
     return;
   }
 
-// ------------------------------------------------------------
-// CAPTURA DURA DE CANTIDAD (evita loops)
-// Si el usuario manda n├║mero (ej "7" o "quiero 7 boletas"), avanzamos sin IA
-// ------------------------------------------------------------
-const qtyCandidate = tryExtractBoletasQty(text);
+  // ------------------------------------------------------------
+  // CAPTURA DURA DE CANTIDAD (evita loops)
+  // Si el usuario manda n├║mero (ej "7" o "quiero 7 boletas"), avanzamos sin IA
+  // ------------------------------------------------------------
+  const qtyCandidate = tryExtractBoletasQty(text);
 
-// Si estamos esperando cantidad, o si el texto menciona boletas + n├║mero
-if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
-  const qty = qtyCandidate;
+  // Si estamos esperando cantidad, o si el texto menciona boletas + n├║mero
+  if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
+    const qty = qtyCandidate;
 
-  // Si tu funci├│n ya soporta cualquier n├║mero, ├║sala:
-  // const breakdown = calcTotalCOPForBoletas(qty);
+    // Si tu funci├│n ya soporta cualquier n├║mero, ├║sala:
+    // const breakdown = calcTotalCOPForBoletas(qty);
 
-  // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
-  const breakdown = calcTotalCOPForBoletas(qty);
+    // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
+    const breakdown = calcTotalCOPForBoletas(qty);
 
-  if (!breakdown) {
-    const replyErr = await withGreeting(
-      wa_id,
-      "No entend├¡ la cantidad. Env├¡ame solo el n├║mero de boletas (ej: 1, 2, 5, 7, 10)."
-    );
-    await sendText(wa_id, replyErr);
-    return;
-  }
-
-  await setConversationStage(wa_id, "PRICE_GIVEN");
-
-// Ô£à Guardar el ├║ltimo c├ílculo para usarlo cuando el usuario diga "nequi" o "daviplata"
-lastPriceQuote.set(wa_id, breakdown);
-
-const reply = await withGreeting(
-  wa_id,
-  pricingReplyMessage(qty, breakdown) +
-  "\n\nÔ£à ┬┐Deseas pagar por Nequi o Daviplata?"
-);
-
-await sendText(wa_id, reply);
-return;
-}
-
-// Ô£à Si ya dimos precio y el usuario eligi├│ m├®todo, respondemos m├®todo sin volver a preguntar cantidad
-if (stage === "PRICE_GIVEN") {
-  const tt = t.toLowerCase();
-
-  if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
-    const quote = lastPriceQuote.get(wa_id);
-
-    // (opcional) si no hay quote, igual respondemos m├®todo sin inventar total
-    const resumen = quote?.total
-      ? `Ô£à Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
-      : "";
-
-    if (tt.includes("nequi")) {
-      const reply = await withGreeting(
+    if (!breakdown) {
+      const replyErr = await withGreeting(
         wa_id,
-        `${resumen}­ƒô▓ Paga por *Nequi* al n├║mero *3223146142*.\nLuego env├¡ame el comprobante + tu nombre completo + municipio + celular.`
+        "No entend├¡ la cantidad. Env├¡ame solo el n├║mero de boletas (ej: 1, 2, 5, 7, 10)."
       );
-      await sendText(wa_id, reply);
+
+      // 🔹 LOG OUT
+      await safeConversationLog("OUT", wa_id, replyErr);
+
+      await sendText(wa_id, replyErr);
       return;
     }
 
-    // daviplata
+    await setConversationStage(wa_id, "PRICE_GIVEN");
+
+    // Ô£à Guardar el ├║ltimo c├ílculo para usarlo cuando el usuario diga "nequi" o "daviplata"
+    lastPriceQuote.set(wa_id, breakdown);
+
     const reply = await withGreeting(
       wa_id,
-      `${resumen}­ƒô▓ Paga por *Daviplata* al n├║mero *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego env├¡ame el comprobante + tu nombre completo + municipio + celular.`
+      pricingReplyMessage(qty, breakdown) +
+      "\n\nÔ£à ┬┐Deseas pagar por Nequi o Daviplata?"
     );
+
+    // 🔹 LOG OUT
+    await safeConversationLog("OUT", wa_id, reply);
+
     await sendText(wa_id, reply);
     return;
   }
-}
 
-   // ------------------------------------------------------------
+  // Ô£à Si ya dimos precio y el usuario eligi├│ m├®todo, respondemos m├®todo sin volver a preguntar cantidad
+  if (stage === "PRICE_GIVEN") {
+    const tt = t.toLowerCase();
+
+    if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
+      const quote = lastPriceQuote.get(wa_id);
+
+      // (opcional) si no hay quote, igual respondemos m├®todo sin inventar total
+      const resumen = quote?.total
+        ? `Ô£à Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
+        : "";
+
+      if (tt.includes("nequi")) {
+        const reply = await withGreeting(
+          wa_id,
+          `${resumen}­ƒô▓ Paga por *Nequi* al n├║mero *3223146142*.\nLuego env├¡ame el comprobante + tu nombre completo + municipio + celular.`
+        );
+
+        // 🔹 LOG OUT
+        await safeConversationLog("OUT", wa_id, reply);
+
+        await sendText(wa_id, reply);
+        return;
+      }
+
+      // daviplata
+      const reply = await withGreeting(
+        wa_id,
+        `${resumen}­ƒô▓ Paga por *Daviplata* al n├║mero *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego env├¡ame el comprobante + tu nombre completo + municipio + celular.`
+      );
+
+      // 🔹 LOG OUT
+      await safeConversationLog("OUT", wa_id, reply);
+
+      await sendText(wa_id, reply);
+      return;
+    }
+  }
+
+  // ------------------------------------------------------------
   // 5) TODO LO DEM├üS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
@@ -1362,87 +1448,125 @@ if (stage === "PRICE_GIVEN") {
   const aiReply = humanizeIfJson(aiReplyRaw);
 
   const replyAI = await withGreeting(wa_id, aiReply);
-await sendText(wa_id, replyAI);
-return;
+
+  // 🔹 LOG OUT (respuesta IA)
+  await safeConversationLog("OUT", wa_id, replyAI);
+
+  await sendText(wa_id, replyAI);
+  return;
 }
 
     // =========================
-    // IMAGE (filtro publicidad vs comprobante)
-    // =========================
-    if (type === "image") {
-      const mediaId = msg.image?.id;
+// IMAGE (filtro publicidad vs comprobante)
+// =========================
+if (type === "image") {
+  const mediaId = msg.image?.id;
 
-      await saveConversation({ wa_id, direction: "IN", message: "[imagen] recibida" });
+  // 🔹 LOG IN (imagen recibida)
+  await safeConversationLog("IN", wa_id, `[imagen] recibida (mediaId: ${mediaId || "N/A"})`);
 
-      let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
+  await saveConversation({ wa_id, direction: "IN", message: "[imagen] recibida" });
 
-      try {
-        cls = await classifyPaymentImage({ mediaId });
-      } catch (e) {
-        console.warn("ÔÜá Clasificaci├│n fall├│, contin├║o como DUDA:", e?.message || e);
-      }
+  let cls = { label: "DUDA", confidence: 0, why: "sin IA" };
 
-      setLastImageLabel(wa_id, cls.label);
-      console.log("­ƒºá Clasificaci├│n imagen:", cls);
+  try {
+    cls = await classifyPaymentImage({ mediaId });
+  } catch (e) {
+    console.warn("ÔÜá Clasificaci├│n fall├│, contin├║o como DUDA:", e?.message || e);
 
-      if (cls.label === "PUBLICIDAD") {
-        const reply = await withGreeting(
-          wa_id,
-          "­ƒôó Esa imagen es publicidad.\n\nsi es nuestra publicidad."
-        );
-        await sendText(wa_id, reply);
-        return;
-      }
+    // 🔹 LOG OUT (solo monitoreo)
+    await safeConversationLog("OUT", wa_id, `⚠️ Error clasificando imagen: ${String(e?.message || e).slice(0, 300)}`);
+  }
 
-      if (cls.label !== "COMPROBANTE") {
-        const reply = await withGreeting(
-          wa_id,
-          "­ƒæÇ No logro confirmar si es un comprobante.\nPor favor env├¡ame una captura clara del recibo de pago."
-        );
-        await sendText(wa_id, reply);
-        return;
-      }
+  setLastImageLabel(wa_id, cls.label);
+  console.log("­ƒºá Clasificaci├│n imagen:", cls);
 
-      // Ô£à Aqu├¡ crear referencia si es comprobante
-      const { ref } = await createReference({
-        wa_id,
-        last_msg_type: "image",
-        receipt_media_id: mediaId,
-        receipt_is_payment: "YES",
-      });
-
-      const reply = await withGreeting(
-        wa_id,
-        `Ô£à Comprobante recibido.\n\n­ƒôî Referencia de pago: ${ref}\n\nTu pago est├í en revisi├│n.`
-      );
-      await sendText(wa_id, reply, ref);
-      return;
-    }
-
-    // =========================
-    // DOCUMENT: pedir imagen
-    // =========================
-    if (type === "document") {
-      await saveConversation({ wa_id, direction: "IN", message: "[document] recibido" });
-
-      const reply = await withGreeting(
-        wa_id,
-        "­ƒôä Recib├¡ un documento. Por favor env├¡ame el comprobante como *imagen/captura* para procesarlo m├ís r├ípido."
-      );
-      await sendText(wa_id, reply);
-      return;
-    }
-
-    // Otros tipos (sticker, video, etc.)
-    await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
+  if (cls.label === "PUBLICIDAD") {
     const reply = await withGreeting(
       wa_id,
-      "Ô£à Recibido. Por favor env├¡ame un mensaje de texto o una imagen del comprobante para ayudarte."
+      "­ƒôó Esa imagen es publicidad.\n\nsi es nuestra publicidad."
     );
+
+    // 🔹 LOG OUT
+    await safeConversationLog("OUT", wa_id, reply);
+
     await sendText(wa_id, reply);
-  } catch (e) {
-    console.error("ÔØî /webhook error:", e?.message || e);
+    return;
   }
+
+  if (cls.label !== "COMPROBANTE") {
+    const reply = await withGreeting(
+      wa_id,
+      "­ƒæÇ No logro confirmar si es un comprobante.\nPor favor env├¡ame una captura clara del recibo de pago."
+    );
+
+    // 🔹 LOG OUT
+    await safeConversationLog("OUT", wa_id, reply);
+
+    await sendText(wa_id, reply);
+    return;
+  }
+
+  // Ô£à Aqu├¡ crear referencia si es comprobante
+  const { ref } = await createReference({
+    wa_id,
+    last_msg_type: "image",
+    receipt_media_id: mediaId,
+    receipt_is_payment: "YES",
+  });
+
+  const reply = await withGreeting(
+    wa_id,
+    `Ô£à Comprobante recibido.\n\n­ƒôî Referencia de pago: ${ref}\n\nTu pago est├í en revisi├│n.`
+  );
+
+  // 🔹 LOG OUT
+  await safeConversationLog("OUT", wa_id, reply);
+
+  await sendText(wa_id, reply, ref);
+  return;
+}
+
+// =========================
+// DOCUMENT: pedir imagen
+// =========================
+if (type === "document") {
+  // 🔹 LOG IN (documento recibido)
+  await safeConversationLog("IN", wa_id, "[document] recibido");
+
+  await saveConversation({ wa_id, direction: "IN", message: "[document] recibido" });
+
+  const reply = await withGreeting(
+    wa_id,
+    "­ƒôä Recib├¡ un documento. Por favor env├¡ame el comprobante como *imagen/captura* para procesarlo m├ís r├ípido."
+  );
+
+  // 🔹 LOG OUT
+  await safeConversationLog("OUT", wa_id, reply);
+
+  await sendText(wa_id, reply);
+  return;
+}
+
+// Otros tipos (sticker, video, etc.)
+await safeConversationLog("IN", wa_id, `[${type}] recibido`);
+await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` });
+
+const reply = await withGreeting(
+  wa_id,
+  "Ô£à Recibido. Por favor env├¡ame un mensaje de texto o una imagen del comprobante para ayudarte."
+);
+
+// 🔹 LOG OUT
+await safeConversationLog("OUT", wa_id, reply);
+
+await sendText(wa_id, reply);
+} catch (e) {
+  console.error("ÔØî /webhook error:", e?.message || e);
+
+  // 🔹 LOG OUT (solo monitoreo)
+  await safeConversationLog("OUT", wa_id, `🚨 /webhook error: ${String(e?.message || e).slice(0, 500)}`);
+}
 });
 
 // TELEGRAM WEBHOOK (SECRET OBLIGATORIO)
