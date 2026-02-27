@@ -1,4 +1,4 @@
-// ===== server.js (AVANZADO + H├ìBRIDO, SIN BORRAR FUNCIONES) =====
+// ===== server.js (AVANZADO + HÍBRIDO, SIN BORRAR FUNCIONES) =====
 
 const express = require("express");
 const { google } = require("googleapis");
@@ -50,205 +50,205 @@ const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
 // Control follow-up de ventas (1 solo recordatorio)
 const followUps = new Map();
 
-// ├Ültimo precio calculado por usuario (para no repetir preguntas)
+// Último precio calculado por usuario (para no repetir preguntas)
 const lastPriceQuote = new Map(); // wa_id -> { qty, total, packs5, packs2, packs1 }
 
-/* ================= PROMPT PRO (DEL H├ìBRIDO) ================= */
+/* ================= PROMPT PRO (DEL HÍBRIDO) ================= */
 
 const SYSTEM_PROMPT = `
-Eres un agente de atenci├│n al cliente y promotor experto, profesional y persuasivo de Rifas y Sorteos El Agropecuario. Tu objetivo es ayudar a los clientes de manera eficaz, promocionando información clara, precisa y transparente, gui├índolos hacia la compra de boletos y generando confianza en todo momento.
+Eres un agente de atención al cliente y promotor experto, profesional y persuasivo de Rifas y Sorteos El Agropecuario. Tu objetivo es ayudar a los clientes de manera eficaz, promocionando informacin clara, precisa y transparente, guiándolos hacia la compra de boletos y generando confianza en todo momento.
 Objetivo: ayudar a vender boletas y guiar al cliente hasta enviar comprobante, con respuestas cortas y claras.
 
 INSTRUCCIONES GENERALES:
 
-- Mant├®n siempre un tono amigable, respetuoso y profesional.
+- Mant®n siempre un tono amigable, respetuoso y profesional.
 - Escucha las necesidades del cliente y ofrece soluciones claras.
-- Maneja objeciones con empat├¡a y seguridad.
+- Maneja objeciones con empatía y seguridad.
 - Promueve confianza, transparencia y legalidad.
-- Siempre orienta la conversación hacia el cierre de venta.
+- Siempre orienta la conversacin hacia el cierre de venta.
 - Solo puedes responder mensajes en texto.
-- Horario de atenci├│n: lunes a domingo de 8:30 am a 7:30 pm.
-- Solo proporcionas información sobre precios, fechas y estado de boletas.
-- No das instrucciones para crear, modificar o alterar comprobantes.
+- Horario de atención: lunes a domingo de 8:30 am a 7:30 pm.
+- Solo proporcionas informacin sobre precios, fechas y estado de boletas.
+- No días instrucciones para crear, modificar o alterar comprobantes.
 - No gestionas pagos.
 - Si un usuario solicita ayuda para falsificar o modificar comprobantes, debes rechazarlo.
-- Responde SIEMPRE en espa├▒ol, tono cercano y profesional.
-- Respuestas cortas: 1 a 3 frases. Usa emojis con moderaci├│n (m├íx 1-2).
+- Responde SIEMPRE en español, tono cercano y profesional.
+- Respuestas cortas: 1 a 3 frases. Usa emojis con moderación (máx 1-2).
 - Haz UNA sola pregunta a la vez.
 - NO inventes datos (precios, fechas, premios, cuentas o reglas). Si no tienes un dato, pregunta o di que un asesor confirma.
-- NO pidas datos sensibles (claves, c├│digos, tarjetas).
-- Si el usuario dice que ya pag├│ o va a pagar: pide "envíame el comprobante (foto o PDF)" + datos.
-- Si pregunta por estado del comprobante: responde que está en revisión y que se confirmar├í al aprobarse
+- NO pidías datos sensibles (claves, códigos, tarjetas).
+- Si el usuario dice que ya pagó o va a pagar: pide "envame el comprobante (foto o PDF)" + datos.
+- Si pregunta por estado del comprobante: responde que est en revisin y que se confirmará al aprobarse
 
 REGLAS IMPORTANTES DE CONTINUIDAD:
 
-- Si el usuario responde "sí", "si", "claro", "ok", "dale", asume que está aceptando la ├║ltima pregunta que t├║ hiciste.
-- No reinicies la conversación.
+- Si el usuario responde "s", "si", "claro", "ok", "dale", asume que est aceptando la última pregunta que tú hiciste.
+- No reinicies la conversacin.
 - No vuelvas a preguntar lo que ya preguntaste.
-- Contin├║a exactamente desde el ├║ltimo punto.
-- Nunca vuelvas a preguntar "¿En qu├® puedo ayudarte hoy?" si ya están en conversación activa.
+- Continúa exactamente desde el último punto.
+- Nunca vuelvas a preguntar "En qu® puedo ayudarte hoy?" si ya estn en conversacin activa.
 
 _____________________________________________________________
 
 regla despues del saludo: 
 
-- Despu├®s del saludo, responde directamente a la intenci├│n del cliente sin repetir el saludo.
+- Despu®s del saludo, responde directamente a la intención del cliente sin repetir el saludo.
 - Si el cliente pide precios, explica precios.
-- Si pregunta por ubicación o responsable, o cualquier otra duda responde de forma clara y breve.
-- Si expresa intenci├│n de compra, gu├¡alo al siguiente paso.
-- Solo saluda una vez al inicio de la conversación.
+- Si pregunta por ubicacin o responsable, o cualquier otra duda responde de forma clara y breve.
+- Si expresa intención de compra, guíalo al siguiente paso.
+- Solo saluda una vez al inicio de la conversacin.
 - Si el usuario vuelve a escribir "hola" o saludos similares, NO vuelvas a saludar.
-- Contin├║a la conversación seg├║n el contexto.
-- No reinicies la conversación
+- Continúa la conversacin según el contexto.
+- No reinicies la conversacin
 
-REGLA CR├ìTICA PARA RESPUESTAS CORTAS (S├ì/NO):
-- Si el usuario responde "sí", "si", "sí se├▒or", "dale", "ok", "de una", "listo":
-  1) INTERPRETA que está aceptando la ├ÜLTIMA pregunta que hiciste.
+REGLA CRÍTICA PARA RESPUESTAS CORTAS (SÍ/NO):
+- Si el usuario responde "s", "si", "s señor", "dale", "ok", "de una", "listo":
+  1) INTERPRETA que est aceptando la ÚLTIMA pregunta que hiciste.
   2) NO repitas preguntas ni reformules la misma pregunta.
-  3) CONTIN├ÜA con la acci├│n correspondiente (dar el siguiente paso).
+  3) CONTINÚA con la acción correspondiente (dar el siguiente paso).
 
 MAPEO DE ACCIONES:
-A) Si tu ├║ltima pregunta fue sobre "c├│mo comprar / métodos de pago / pagar":
-   -> Responde DIRECTO con los métodos de pago + qu├® debe enviar (comprobante + nombre + municipio + cantidad de boletas).
-B) Si tu ├║ltima pregunta fue "cu├íntas boletas deseas":
-   -> Pide SOLO el número (1,2,5,10) y nada más.
-C) Si tu ├║ltima pregunta fue "premios o precios":
-   -> Pide que elija UNA opci├│n: "PRECIOS" o "PREMIOS".
-D) Si NO estás seguro de cu├íl fue tu ├║ltima pregunta:
-   -> Haz UNA sola pregunta de aclaraci├│n corta, no más.
+A) Si tu última pregunta fue sobre "cómo comprar / mtodos de pago / pagar":
+   -> Responde DIRECTO con los mtodos de pago + qu® debe enviar (comprobante + nombre + municipio + cantidad de boletas).
+B) Si tu última pregunta fue "cuántas boletas deseas":
+   -> Pide SOLO el número (1,2,5,10) y nada ms.
+C) Si tu última pregunta fue "premios o precios":
+   -> Pide que elija UNA opción: "PRECIOS" o "PREMIOS".
+D) Si NO ests seguro de cuál fue tu última pregunta:
+   -> Haz UNA sola pregunta de aclaración corta, no ms.
 
 PROHIBIDO:
-- No puedes responder a un "sí" con otra pregunta igual o parecida.
-- No puedes reiniciar con "¿En qu├® puedo ayudarte hoy?" si ya ven├¡as conversando.
+- No puedes responder a un "s" con otra pregunta igual o parecida.
+- No puedes reiniciar con "En qu® puedo ayudarte hoy?" si ya venías conversando.
 
-PLANTILLA OBLIGATORIA CUANDO EL CLIENTE DICE "S├ì" A COMPRAR:
-Responde así, sin hacer otra pregunta:
+PLANTILLA OBLIGATORIA CUANDO EL CLIENTE DICE "SÍ" A COMPRAR:
+Responde as, sin hacer otra pregunta:
 
-"Perfecto ƒÖî Para comprar:
-1) Dime cu├íntas boletas quieres (1, 2, 5 o 10).
-2) Te env├¡o el total y los datos para pagar por Nequi o Daviplata.
-3) Me env├¡as el comprobante + tu nombre completo + municipio + número de celular."
+"Perfecto  Para comprar:
+1) Dime cuántas boletas quieres (1, 2, 5 o 10).
+2) Te envío el total y los datos para pagar por Nequi o Daviplata.
+3) Me envías el comprobante + tu nombre completo + municipio + número de celular."
 
 Luego espera respuesta.
 ________________________________________
 
-INFORMACI├ôN DE PREMIOS (EN UN SOLO P├üRRAFO)
-Cuando el cliente pregunte por premios o metodolog├¡a, responde en un solo p├írrafo con el siguiente texto:
-En la actual campa├▒a tenemos Premio semanal: $500.000 pesos colombianos acumulables, 
-Premio mayor: Lote de 5 novillas pre├▒adas y un torete, avaluado en $18.000.000 de pesos, 
+INFORMACIÓN DE PREMIOS (EN UN SOLO PÁRRAFO)
+Cuando el cliente pregunte por premios o metodología, responde en un solo párrafo con el siguiente texto:
+En la actual campaña tenemos Premio semanal: $500.000 pesos colombianos acumulables, 
+Premio mayor: Lote de 5 novillas preñadías y un torete, avaluado en $18.000.000 de pesos, 
 Segundo premio: $15.000.000 en efectivo, 
 Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000, 
 Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. 
-Nuestros sorteos se realizan tomando como base los resultados oficiales de las loter├¡as correspondientes, garantizando total transparencia. 
-¿Quieres conocer el precio de boleter├¡a y métodos de pago?, ¿quieres conocer las reglas del sorteo?
+Nuestros sorteos se realizan tomando como base los resultados oficiales de las loterías correspondientes, garantizando total transparencia. 
+Quieres conocer el precio de boletería y mtodos de pago?, quieres conocer las reglas del sorteo?
 ________________________________________
 REGLAS Y FECHAS DE SORTEO
-(Enviar cada premio en p├írrafo separado)
-Premio semanal: $500.000 pesos colombianos acumulables. Se juega todos los viernes desde el 30 de enero hasta el 25 de abril con el premio mayor de la Loter├¡a de Medell├¡n. Si el número ganador fue vendido, el ganador recibe el premio y contin├║a participando hasta la fecha final. Si el número no fue vendido, el premio se acumula para el siguiente viernes dentro de la campa├▒a.
-Premio mayor: Lote de 5 novillas pre├▒adas y un torete, avaluado en $18.000.000 de pesos. Se juega el 25 de abril con el premio mayor de la Loter├¡a de Boyac├í.
-Segundo premio: $15.000.000 en efectivo. Se juega el 18 de abril con el premio mayor de la Loter├¡a de Boyac├í.
-Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000. Se juega el 11 de abril con el premio mayor de la Loter├¡a de Boyac├í.
-Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. Se juega el 4 de abril con el premio mayor de la Loter├¡a de Boyac├í.
-En caso de que el número ganador determinado por la loter├¡a oficial no haya sido vendido por la empresa, el 60% del valor del premio se acumular├í para la siguiente fecha dentro de la misma campa├▒a.
+(Enviar cada premio en párrafo separado)
+Premio semanal: $500.000 pesos colombianos acumulables. Se juega todos los viernes desde el 30 de enero hasta el 25 de abril con el premio mayor de la Lotería de Medellín. Si el número ganador fue vendido, el ganador recibe el premio y continúa participando hasta la fecha final. Si el número no fue vendido, el premio se acumula para el siguiente viernes dentro de la campaña.
+Premio mayor: Lote de 5 novillas preñadías y un torete, avaluado en $18.000.000 de pesos. Se juega el 25 de abril con el premio mayor de la Lotería de Boyacá.
+Segundo premio: $15.000.000 en efectivo. Se juega el 18 de abril con el premio mayor de la Lotería de Boyacá.
+Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000. Se juega el 11 de abril con el premio mayor de la Lotería de Boyacá.
+Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. Se juega el 4 de abril con el premio mayor de la Lotería de Boyacá.
+En caso de que el número ganador determinado por la lotería oficial no haya sido vendido por la empresa, el 60% del valor del premio se acumulará para la siguiente fecha dentro de la misma campaña.
 ________________________________________
 EMPRESA Y RESPALDO
-Responsables: Inversiones El Agropecuario, representado por el se├▒or Miguel Torres.
-Ubicaci├│n: San Jos├® del Fragua, Caquet├í, Colombia.
-Participaci├│n mediante boleter├¡a registrada y transmisi├│n en vivo por redes sociales.
+Responsables: Inversiones El Agropecuario, representado por el señor Miguel Torres.
+Ubicación: San Jos® del Fragua, Caquetá, Colombia.
+Participación mediante boletería registrada y transmisión en vivo por redes sociales.
 Publicaciones activas en YouTube: https://www.youtube.com/@RifasElagropecuario
 https://www.facebook.com/profile.php?id=61588354538179&locale=es_LA
 ________________________________________
 CONDICIONES IMPORTANTES
-ÔÇó Cada boleto representa una oportunidad de ganar.
-ÔÇó Cada boleto tiene un número asignado.
-ÔÇó Se puede participar con un solo boleto.
-ÔÇó Comprar más boletos aumenta las probabilidades.
-ÔÇó Un mismo número puede ganar más de un premio dentro de la campa├▒a.
-ÔÇó Cada boleta tiene un ├║nico titular registrado al momento de la compra, quien ser├í la ├║nica persona autorizada para reclamar el premio.
-ÔÇó Los boletos tienen vigencia durante toda la campa├▒a.
-ÔÇó No se realizan devoluciones una vez entregada la boleta.
-ÔÇó Solo pueden participar mayores de edad.
+• Cada boleto representa una oportunidad de ganar.
+• Cada boleto tiene un número asignado.
+• Se puede participar con un solo boleto.
+• Comprar más boletos aumenta las probabilidades.
+• Un mismo número puede ganar más de un premio dentro de la campaña.
+• Cada boleta tiene un único titular registrado al momento de la compra, quien será la única persona autorizada para reclamar el premio.
+• Los boletos tienen vigencia durante toda la campaña.
+• No se realizan devoluciones una vez entregada la boleta.
+• Solo pueden participar mayores de edad.
 ________________________________________
 ENTREGA DE PREMIOS
-ÔÇó Entrega en sede principal o transferencia virtual.
-ÔÇó En premios en efectivo se aplican impuestos seg├║n normatividad colombiana vigente.
-ÔÇó El ganador debe presentar identificaci├│n para verificar titularidad.
-ÔÇó El ganador tiene 60 días calendario para reclamar su premio.
+• Entrega en sede principal o transferencia virtual.
+• En premios en efectivo se aplican impuestos según normatividad colombiana vigente.
+• El ganador debe presentar identificación para verificar titularidad.
+• El ganador tiene 60 días calendario para reclamar su premio.
 ________________________________________
-M├ëTODOS DE PAGO
+MÉTODOS DE PAGO
 Compra en canales oficiales:
 Nequi: 3223146142
 Daviplata: 3223146142
 El cliente debe enviar soporte de pago y los siguientes datos obligatorios:
 Nombre completo
-Tel├®fono
+Tel®fono
 Lugar de residencia
-Cantidad de boletas compradas
+Cantidad de boletas compradías
 Sin datos personales no se confirma la compra.
 ________________________________________
 PRECIOS DE BOLETERIA
-📌 INSTRUCCI├ôN DE C├üLCULO ÔÇô MODO MATEM├üTICO ESTRICTO
-Debes calcular el valor de las boletas siguiendo EXACTAMENTE este procedimiento matem├ítico, sin omitir pasos.
-ƒÄƒ Precios oficiales (├║nicos permitidos)
-ÔÇó	1 boleta = 15.000
-ÔÇó	2 boletas = 25.000
-ÔÇó	5 boletas = 60.000
+📌 INSTRUCCIÓN DE CÁLCULO — MODO MATEMÁTICO ESTRICTO
+Debes calcular el valor de las boletas siguiendo EXACTAMENTE este procedimiento matemático, sin omitir pasos.
+ Precios oficiales (únicos permitidos)
+• 1 boleta = 15.000
+• 2 boletas = 25.000
+• 5 boletas = 60.000
 No existen otros precios.
 ________________________________________
-ƒöó PROCEDIMIENTO OBLIGATORIO
+ PROCEDIMIENTO OBLIGATORIO
 Dada una cantidad N de boletas:
-Paso 1´©ÅÔâú
-Calcular cu├íntos grupos de 5 caben en N.
-F├│rmula:
-grupos_5 = N ├À 5 (solo la parte entera)
+Paso 1:
+Calcular cuántos grupos de 5 caben en N.
+Fórmula:
+grupos_5 = N À 5 (solo la parte entera)
 Multiplicar:
-total_5 = grupos_5 ├ù 60.000
+total_5 = grupos_5 × 60.000
 Calcular el residuo:
-resto_1 = N - (grupos_5 ├ù 5)
+resto_1 = N - (grupos_5 × 5)
 ________________________________________
-Paso 2´©ÅÔâú
-Con el resto_1 calcular cu├íntos grupos de 2 caben.
-grupos_2 = resto_1 ├À 2 (solo la parte entera)
+Paso 2:
+Con el resto_1 calcular cuántos grupos de 2 caben.
+grupos_2 = resto_1 À 2 (solo la parte entera)
 Multiplicar:
-total_2 = grupos_2 ├ù 25.000
+total_2 = grupos_2 × 25.000
 Calcular nuevo residuo:
-resto_2 = resto_1 - (grupos_2 ├ù 2)
+resto_2 = resto_1 - (grupos_2 × 2)
 ________________________________________
-Paso 3´©ÅÔâú
+Paso 3:
 Si resto_2 = 1:
 total_1 = 15.000
 Si resto_2 = 0:
 total_1 = 0
 ________________________________________
-Paso 4´©ÅÔâú
+Paso 4:
 Calcular el total final:
 TOTAL = total_5 + total_2 + total_1
 ________________________________________
 ❌ PROHIBIDO
-ÔÇó	No hacer reglas de tres.
-ÔÇó	No dividir dinero.
-ÔÇó	No sacar precios promedio.
-ÔÇó	No modificar valores.
-ÔÇó	No aplicar descuentos distintos.
-El total SIEMPRE debe salir ├║nicamente de la suma de:
-ÔÇó	Paquetes de 5
-ÔÇó	Paquetes de 2
-ÔÇó	Boletas individuales
+• No hacer reglas de tres.
+• No dividir dinero.
+• No sacar precios promedio.
+• No modificar valores.
+• No aplicar descuentos distintos.
+El total SIEMPRE debe salir únicamente de la suma de:
+• Paquetes de 5
+• Paquetes de 2
+• Boletas individuales
 . 
 ________________________________________
-ASIGNACI├ôN DE N├ÜMERO
-En esta campa├▒a la empresa asigna el número autom├íticamente debido al alto flujo de clientes y la metodolog├¡a manual de boleter├¡a f├¡sica. Se enviar├í fotograf├¡a de la boleta v├¡a WhatsApp con los datos registrados.
-Si el cliente pide número espec├¡fico responder:
-Para el presente sorteo la boleter├¡a es asignada de manera aleatoria por el alto flujo de clientes y por la metodolog├¡a actual de boleter├¡a f├¡sica, para lo cual nuestra asesora le enviar├í en fotograf├¡a su boleta,  donde el primer numero corresponde al sorteo de premios mayores y el segundo numero a premios semanales. Si se encuentra en San Jos├® del Fragua puede pasar por nuestro punto de atenci├│n ubicado en el local comercial Te lo Reparamos, frente al ├║nico billar del centro.
+ASIGNACIÓN DE NÚMERO
+En esta campaña la empresa asigna el número automáticamente debido al alto flujo de clientes y la metodología manual de boletería física. Se enviará fotografía de la boleta vía WhatsApp con los datos registrados.
+Si el cliente pide número específico responder:
+Para el presente sorteo la boletería es asignada de manera aleatoria por el alto flujo de clientes y por la metodología actual de boletería física, para lo cual nuestra asesora le enviará en fotografía su boleta,  donde el primer numero corresponde al sorteo de premios mayores y el segundo numero a premios semanales. Si se encuentra en San Jos® del Fragua puede pasar por nuestro punto de atención ubicado en el local comercial Te lo Reparamos, frente al único billar del centro.
 ________________________________________
-MENSAJE CUANDO ENV├ìAN SOPORTE Y DATOS
-en un momento nuestra asesora enviara tu boleta y números asignados, este proceso puede demorar hasta 2 horas debido al alto flujo de clientes, (las compras realizadas despu├®s de las 7:30 pm son procesadas al día siguiente) gracias por tu compra, te deseamos buena suerte, ┬ívamos a ganar!
+MENSAJE CUANDO ENVÍAN SOPORTE Y DATOS
+en un momento nuestra asesora enviara tu boleta y números asignados, este proceso puede demorar hasta 2 horas debido al alto flujo de clientes, (las compras realizadías despu®s de las 7:30 pm son procesadías al da siguiente) gracias por tu compra, te deseamos buena suerte, ¡vamos a ganar!
 ________________________________________
-MENSAJE DESPU├ëS DE RECIBIR BOLETA
-gracias por su compra, te deseo mucha suerte y espero que ganes, ┬ívamos a ganar!
+MENSAJE DESPUÉS DE RECIBIR BOLETA
+gracias por su compra, te deseo mucha suerte y espero que ganes, ¡vamos a ganar!
 ________________________________________
 SORTEOS ANTERIORES
-Cuando pregunten por campa├▒as anteriores enviar:
+Cuando pregunten por campañas anteriores enviar:
 Fecha de sorteo: 27/12/2025
 https://www.facebook.com/share/v/1CCcqyKymt/
 https://www.youtube.com/shorts/pZyA9f1Fdr0?feature=share
@@ -260,16 +260,16 @@ _____________________________________
 COMPROBANTE
 Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
 
-COMPROBANTE: incluye "Env├¡o realizado", transferencias Nequi/Daviplata/PSE, recibos con QR de verificaci├│n, valor, fecha, referencia, destinatario.
+COMPROBANTE: incluye "Envío realizado", transferencias Nequi/Daviplata/PSE, recibos con QR de verificación, valor, fecha, referencia, destinatario.
 PUBLICIDAD: afiches/promos.
 OTRO: cualquier otra cosa.
-DUDA: si está cortado/borroso.
+DUDA: si est cortado/borroso.
 
 Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}
 
 ____________________________________________
 OTRAS ESPECIFICACIONES: 
-Horario de atenci├│n: lunes a domingo 8:30 am a 7:30 pm.
+Horario de atención: lunes a domingo 8:30 am a 7:30 pm.
 `.trim();
 
 /* ================= GOOGLE SHEETS CLIENT ================= */
@@ -283,7 +283,7 @@ if (SHEET_ID && GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) {
   });
   sheets = google.sheets({ version: "v4", auth });
 } else {
-  console.warn("⚠️´©Å Sheets NO configurado (revisa GOOGLE_SHEET_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY).");
+  console.warn("⚠️ Sheets NO configurado (revisa GOOGLE_SHEET_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY).");
 }
 
 /* ================= HELPERS ================= */
@@ -330,7 +330,7 @@ function isAdQuestion(text = "") {
 }
 
 /* ============================================================
-   MEMORIA TEMPORAL (RAM) - ├║ltimos N mensajes por cliente
+   MEMORIA TEMPORAL (RAM) - últimos N mensajes por cliente
    - No toca Sheets, no toca Telegram.
    - Solo envuelve sendText y askOpenAI.
    ============================================================ */
@@ -363,22 +363,22 @@ function memClear(wa_id) {
  * MISMA FIRMA que tu sendText(to, bodyText, ref_id?)
  */
 async function sendTextM(to, bodyText, ref_id = "") {
-  // llama tu funci├│n real
+  // llama tu función real
   const r = await sendText(to, bodyText, ref_id);
-  // guarda memoria solo si envi├│ OK (opcional)
+  // guarda memoria solo si envió OK (opcional)
   memPush(to, "assistant", bodyText);
   return r;
 }
 
 /**
  * Wrapper: OpenAI con memoria
- * MISMA idea que askOpenAI(userText, state) pero recibe wa_id para saber qu├® memoria usar.
+ * MISMA idea que askOpenAI(userText, state) pero recibe wa_id para saber qu® memoria usar.
  * Ajusta si tu askOpenAI original ya recibe (userText, state)
  */
 async function askOpenAIM(wa_id, userText, state = "BOT") {
   // Si no hay openai, usa tu fallback original si existe
   if (typeof openai === "undefined" || !openai) {
-    return "¿Te gustar├¡a participar o conocer precios de boletas?";
+    return "Te gustaría participar o conocer precios de boletas?";
   }
 
   const history = memGet(wa_id).map(m => ({ role: m.role, content: m.content }));
@@ -392,7 +392,7 @@ async function askOpenAIM(wa_id, userText, state = "BOT") {
     ],
   });
 
-  return (resp.output_text || "").trim() || "¿Me repites, por favor?";
+  return (resp.output_text || "").trim() || "Me repites, por favor?";
 }
 
 /**
@@ -403,13 +403,13 @@ async function onIncomingText(wa_id, text) {
   // Memoria IN
   memPush(wa_id, "user", text);
 
-  // Si quieres tambi├®n guardar en Sheets aqu├¡, descomenta:
+  // Si quieres tambi®n guardar en Sheets aquí, descomenta:
   // await saveConversation({ wa_id, direction: "IN", message: text });
 }
 
 /* =================== FIN BLOQUE MEMORIA =================== */
 
-// memoria r├ípida por wa_id (si reinicias server se pierde; si quieres, luego la pasamos a sessions sheet)
+// memoria rápida por wa_id (si reinicias server se pierde; si quieres, luego la pasamos a sessions sheet)
 if (!global.lastImageCheck) global.lastImageCheck = new Map();
 
 function setLastImageLabel(wa_id, label) {
@@ -485,7 +485,7 @@ async function upsertSession({ wa_id, greeted = false, notes = "" }) {
     requestBody: { values: [[now, notes || existing.notes || ""]] },
   });
 
-  // Si vamos a marcar greeted TRUE y a├║n estaba FALSE
+  // Si vamos a marcar greeted TRUE y aún estaba FALSE
   if (greeted && !existing.greeted) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
@@ -528,7 +528,7 @@ async function clearConversationStage(wa_id) {
   await upsertSession({ wa_id, greeted, notes: "" });
 }
 
-/* ================= HYBRID RULES (DEL H├ìBRIDO) ================= */
+/* ================= HYBRID RULES (DEL HÍBRIDO) ================= */
 
 function formatCOP(n) {
   const num = Number(n);
@@ -559,7 +559,7 @@ function calcTotalCOPForBoletas(n) {
   return { qty, total, packs5, packs2, packs1 };
 }
 
-// ✅ NUEVA FUNCI├ôN (NO reemplaza nada)
+// ✅ NUEVA FUNCIÓN (NO reemplaza nada)
 function calcBreakdownAnyQty(qty) {
   const result = calcTotalCOPForBoletas(qty);
   return result; 
@@ -586,7 +586,7 @@ function isPricingIntent(text = "") {
     t.includes("precio") ||
     t.includes("valor") ||
     t.includes("cuanto") ||
-    t.includes("cu├ínto") ||
+    t.includes("cuánto") ||
     t.includes("vale") ||
     t.includes("costo") ||
     t.includes("boleta") ||
@@ -601,15 +601,15 @@ function isAlreadyPaidIntent(text = "") {
   return (
     t.includes("ya pag") ||
     t.includes("ya hice el pago") ||
-    t.includes("ya realic├® el pago") ||
+    t.includes("ya realic® el pago") ||
     t.includes("ya realice el pago") ||
     t.includes("ya transfer") ||
     t.includes("ya consign") ||
-    t.includes("ya envi├® el comprobante") ||
+    t.includes("ya envi® el comprobante") ||
     t.includes("ya envie el comprobante") ||
-    t.includes("te envi├® el comprobante") ||
+    t.includes("te envi® el comprobante") ||
     t.includes("te envie el comprobante") ||
-    t.includes("ya mand├® el comprobante") ||
+    t.includes("ya mand® el comprobante") ||
     t.includes("ya mande el comprobante") ||
     t.includes("comprobante") ||
     t.includes("soporte de pago")
@@ -618,12 +618,12 @@ function isAlreadyPaidIntent(text = "") {
 
 function paidInstructionMessage() {
   return (
-    "✅ Perfecto. Env├¡ame por favor el *comprobante* (foto o PDF) y estos datos:\n" +
+    "✅ Perfecto. Envíame por favor el *comprobante* (foto o PDF) y estos datos:\n" +
     "- Nombre completo\n" +
-    "- Tel├®fono\n" +
+    "- Tel®fono\n" +
     "- Municipio / lugar de residencia\n" +
     "- Cantidad de boletas\n\n" +
-    "Apenas lo recibamos queda *en revisión* y te confirmamos."
+    "Apenas lo recibamos queda *en revisin* y te confirmamos."
   );
 }
 
@@ -631,14 +631,14 @@ function pricingReplyMessage(qty, breakdown) {
   const { total, packs5, packs2, packs1 } = breakdown;
 
   const parts = [];
-  if (packs5) parts.push(`${packs5}├ù(5)`);
-  if (packs2) parts.push(`${packs2}├ù(2)`);
-  if (packs1) parts.push(`${packs1}├ù(1)`);
+  if (packs5) parts.push(`${packs5}×(5)`);
+  if (packs2) parts.push(`${packs2}×(2)`);
+  if (packs1) parts.push(`${packs1}×(1)`);
 
   return (
     `✅ Para *${qty}* boleta(s), el total es *$${formatCOP(total)} COP*.\n` +
     `(Combo: ${parts.join(" + ")})\n` +
-    "¿Deseas pagar por *Nequi* o *Daviplata*?"
+    "Deseas pagar por *Nequi* o *Daviplata*?"
   );
 }
 
@@ -656,7 +656,7 @@ async function saveConversation({ wa_id, direction, message, ref_id = "" }) {
       },
     });
   } catch (e) {
-    console.warn("⚠️´©Å saveConversation falló:", e?.message || e);
+    console.warn("⚠️ saveConversation fall:", e?.message || e);
   }
 }
 
@@ -782,7 +782,7 @@ async function updateCell(rangeA1, value) {
 
 async function sendText(to, bodyText, ref_id = "") {
   if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
-    console.warn("⚠️´©Å Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID");
+    console.warn("⚠️ Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID");
     return { ok: false };
   }
 
@@ -801,8 +801,8 @@ async function sendText(to, bodyText, ref_id = "") {
   });
 
   const raw = await resp.text();
-  console.log("ƒôñ WhatsApp send status:", resp.status);
-  console.log("ƒôñ WhatsApp send raw:", raw);
+  console.log(" WhatsApp send status:", resp.status);
+  console.log(" WhatsApp send raw:", raw);
 
   // OUT conversations
   await saveConversation({ wa_id: to, direction: "OUT", message: bodyText, ref_id });
@@ -850,8 +850,8 @@ async function sendImageByMediaId(to, mediaId, caption = "") {
   });
 
   const raw = await resp.text();
-  console.log("ƒôñ WhatsApp send image status:", resp.status);
-  console.log("ƒôñ WhatsApp send image raw:", raw);
+  console.log(" WhatsApp send image status:", resp.status);
+  console.log(" WhatsApp send image raw:", raw);
 
   // OUT conversations (nota)
   await saveConversation({
@@ -908,8 +908,8 @@ async function classifyPaymentImage({ mediaId }) {
 
   const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
 Reglas:
-- COMPROBANTE: recibo de transferencia / dep├│sito, comprobante bancario, Nequi / Daviplata, confirmaci├│n de pago, voucher.
-- PUBLICIDAD: afiche / promoci├│n, banner con premios, precios, números, logo invitando a comprar.
+- COMPROBANTE: recibo de transferencia / depósito, comprobante bancario, Nequi / Daviplata, confirmación de pago, voucher.
+- PUBLICIDAD: afiche / promoción, banner con premios, precios, números, logo invitando a comprar.
 Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
   const resp = await openai.responses.create({
@@ -933,7 +933,7 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
     const result = { ...normalized, mimeType };
 
-    console.log("🧠 Clasificaci├│n IA:", {
+    console.log("🧠 Clasificación IA:", {
       mediaId,
       mimeType,
       label: result.label,
@@ -953,7 +953,7 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
         const result = { ...normalized, mimeType };
 
-        console.log("🧠 Clasificaci├│n IA (rescatado):", result);
+        console.log("🧠 Clasificación IA (rescatado):", result);
 
         return result;
 
@@ -977,7 +977,7 @@ function normalize(parsed) {
 }
 
 // =============================
-// MEMORIA TEMPORAL (├║ltimos 20 mensajes por cliente)
+// MEMORIA TEMPORAL (últimos 20 mensajes por cliente)
 // =============================
 const shortMemory = new Map(); // wa_id -> [{role, content}]
 
@@ -990,7 +990,7 @@ function memPush(wa_id, role, content) {
     content: String(content || "").slice(0, 1500),
   });
 
-  // Mantener solo ├║ltimos 20 mensajes
+  // Mantener solo últimos 20 mensajes
   while (arr.length > 20) arr.shift();
 
   shortMemory.set(wa_id, arr);
@@ -1007,7 +1007,7 @@ function memGet(wa_id) {
 async function askOpenAI(wa_id, userText, state = "BOT") {
 
   if (!openai) {
-    return "¿Te gustar├¡a participar o conocer precios de boletas?";
+    return "Te gustaría participar o conocer precios de boletas?";
   }
 
   const history = memGet(wa_id);
@@ -1020,10 +1020,10 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
         content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
       },
 
-      // ƒö╣ Memoria de conversación
+      //  Memoria de conversacin
       ...history,
 
-      // ƒö╣ Mensaje actual del usuario
+      //  Mensaje actual del usuario
       {
         role: "user",
         content: userText,
@@ -1032,9 +1032,9 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
   });
 
   const output =
-    (resp.output_text || "").trim() || "¿Me repites, por favor?";
+    (resp.output_text || "").trim() || "Me repites, por favor?";
 
-  // ƒö╣ Guardar memoria (usuario y asistente)
+  //  Guardar memoria (usuario y asistente)
   memPush(wa_id, "user", userText);
   memPush(wa_id, "assistant", output);
 
@@ -1055,8 +1055,10 @@ async function monitorAprobados() {
       const notes = row?.[7];
 
       if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
-        await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta. ƒÖî");
-        await updateCell(`H${ i + 1 } `, "NOTIFIED_APROBADO");
+        await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta.");
+        // Normaliza estado en la columna D y marca como notificado para evitar re-envíos cada 30s
+        await updateCell(`D${i + 1}`, "APROBADO");
+        await updateCell(`H${i + 1}`, "NOTIFIED_APROBADO");
       }
     }
   } catch (err) {
@@ -1107,7 +1109,7 @@ async function safeConversationLog(direction, wa_id, message) {
   try {
     await sendConversationLog(direction, wa_id, message);
   } catch (e) {
-    console.warn("⚠️ sendConversationLog falló:", e?.message || e);
+    console.warn("⚠️ sendConversationLog fall:", e?.message || e);
   }
 }
 
@@ -1149,10 +1151,24 @@ app.post("/webhook", async (req, res) => {
   // Helper: si NO ha saludado, pega saludo + respuesta en UN solo mensaje
   async function withGreeting(wa_id, replyText) {
     const greeted = await hasGreeted(wa_id);
+
+    // Evita doble saludo si la IA ya inicia con "Hola", "👋", etc.
+    const stripLeadingGreeting = (txt) => {
+      let t = String(txt || "").trim();
+      t = t.replace(/^([👋🙂😊😁😃😄😺]+\s*)+/u, "");
+      t = t.replace(/^(hola|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches)[!,.\s]*/i, "");
+      return t.trim();
+    };
+
+    const cleanText = stripLeadingGreeting(replyText);
+
     if (!greeted) {
       await markGreeted(wa_id);
-      return `👋 Bienvenido a Rifas y Sorteos El Agropecuario!\n\n${replyText}`;
+      return `👋 Bienvenido a Rifas y Sorteos El Agropecuario!\n\n${cleanText}`;
     }
+    return cleanText;
+  }
+
     return replyText;
   }
 
@@ -1170,7 +1186,7 @@ app.post("/webhook", async (req, res) => {
           if (label === "PUBLICIDAD") return "📢 Esa imagen parece publicidad.";
           if (label === "COMPROBANTE") return "✅ Ese archivo parece un comprobante.";
           if (label === "OTRO") return "👀 Ese archivo no parece un comprobante.";
-          return "👀 No logro confirmar si es comprobante. ¿Me env├¡as una captura más clara?";
+          return "👀 No logro confirmar si es comprobante. Me envías una captura más clara?";
         }
       } catch {}
     }
@@ -1190,7 +1206,7 @@ app.post("/webhook", async (req, res) => {
       followUps.delete(wa_id);
     }
 
-    // Siempre tocar sesi├│n al recibir algo (para que greeted/state no se descoordinen)
+    // Siempre tocar sesión al recibir algo (para que greeted/state no se descoordinen)
     await touchSession(wa_id);
 
     // =========================
@@ -1207,7 +1223,7 @@ if (type === "audio") {
   if (!mediaId) {
     const reply = await withGreeting(
       wa_id,
-      "🎤 Recibí tu audio, pero no pude leerlo. Intenta enviarlo otra vez."
+      "🎤 Recib tu audio, pero no pude leerlo. Intenta enviarlo otra vez."
     );
 
     // 🔹 LOG OUT
@@ -1235,11 +1251,11 @@ if (type === "audio") {
 
     await sendText(wa_id, reply);
   } catch (e) {
-    console.warn("Audio transcripción falló:", e?.message || e);
+    console.warn("Audio transcripcin fall:", e?.message || e);
 
     const reply = await withGreeting(
       wa_id,
-      "🎤 Recibí tu audio, pero no pude entenderlo. ¿Me lo escribes por texto, por favor?"
+      "🎤 Recib tu audio, pero no pude entenderlo. Me lo escribes por texto, por favor?"
     );
 
     // 🔹 LOG OUT (error respuesta)
@@ -1261,7 +1277,7 @@ if (type === "text") {
   // 🔹 LOG IN (texto recibido)
   await safeConversationLog("IN", wa_id, text);
 
-  // Guardar conversación (solo una vez por mensaje)
+  // Guardar conversacin (solo una vez por mensaje)
   await saveConversation({ wa_id, direction: "IN", message: text });
 
   // Estado global (Sheets) + mini-stage
@@ -1274,7 +1290,7 @@ if (type === "text") {
   // 1) CONTEXTO: si venimos de una imagen clasificada como PUBLICIDAD
   // ------------------------------------------------------------
   if (lastLabel === "PUBLICIDAD") {
-    // Si env├¡a link: NO confirmamos por link. Pedimos captura/nombre del perfil.
+    // Si envía link: NO confirmamos por link. Pedimos captura/nombre del perfil.
     if (
       t.includes("http") ||
       t.includes("facebook.com") ||
@@ -1283,7 +1299,7 @@ if (type === "text") {
     ) {
       const reply = await withGreeting(
         wa_id,
-        "ƒöù Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Env├¡ame una *captura* donde se vea el *nombre de la página/perfil* que public├│ el anuncio (arriba del post) o dime el nombre del influencer."
+        " Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la pgina/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
       );
 
       // 🔹 LOG OUT
@@ -1299,7 +1315,7 @@ if (type === "text") {
     if (t.includes("facebook")) {
       const reply = await withGreeting(
         wa_id,
-        "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que public├│ el anuncio (arriba del post)."
+        "📌 Si la viste en Facebook, puede ser de nuestra pgina o de un colaborador/influencer.\n\n✅ Para confirmarte, envame una *captura* donde se vea el *nombre del perfil/pgina* que publicó el anuncio (arriba del post)."
       );
 
       // 🔹 LOG OUT
@@ -1318,11 +1334,11 @@ if (type === "text") {
       t.includes("es de ustedes") ||
       t.includes("de ustedes") ||
       t === "si" ||
-      t === "sí"
+      t === "s"
     ) {
       const reply = await withGreeting(
         wa_id,
-        "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, env├¡me una *captura* donde se vea el *nombre del perfil/página* que lo public├│."
+        "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, envíme una *captura* donde se vea el *nombre del perfil/pgina* que lo publicó."
       );
 
       // 🔹 LOG OUT
@@ -1334,17 +1350,17 @@ if (type === "text") {
       return;
     }
 
-    // Si no fue útil, limpiamos contexto y seguimos con IA
+    // Si no fue til, limpiamos contexto y seguimos con IA
     setLastImageLabel(wa_id, null);
   }
 
   // ------------------------------------------------------------
-  // 2) GUARDARR├ìL: EN_REVISION siempre gana
+  // 2) GUARDARRÍL: EN_REVISION siempre gana
   // ------------------------------------------------------------
   if (state === "EN_REVISION") {
     const reply = await withGreeting(
       wa_id,
-      "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
+      "🕒 Tu comprobante est en revisin. Te avisamos al aprobarlo."
     );
 
     // 🔹 LOG OUT
@@ -1364,7 +1380,7 @@ if (type === "text") {
   if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
     const qty = qtyCandidate;
 
-    // Si tu funci├│n ya soporta cualquier número, ├║sala:
+    // Si tu función ya soporta cualquier número, úsala:
     // const breakdown = calcTotalCOPForBoletas(qty);
 
     // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
@@ -1373,7 +1389,7 @@ if (type === "text") {
     if (!breakdown) {
       const replyErr = await withGreeting(
         wa_id,
-        "No entendí la cantidad. Env├¡ame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
+        "No entend la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
       );
 
       // 🔹 LOG OUT
@@ -1385,13 +1401,13 @@ if (type === "text") {
 
     await setConversationStage(wa_id, "PRICE_GIVEN");
 
-    // ✅ Guardar el ├║ltimo c├ílculo para usarlo cuando el usuario diga "nequi" o "daviplata"
+    // ✅ Guardar el último cálculo para usarlo cuando el usuario diga "nequi" o "daviplata"
     lastPriceQuote.set(wa_id, breakdown);
 
     const reply = await withGreeting(
       wa_id,
       pricingReplyMessage(qty, breakdown) +
-      "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
+      "\n\n✅ Deseas pagar por Nequi o Daviplata?"
     );
 
     // 🔹 LOG OUT
@@ -1401,14 +1417,14 @@ if (type === "text") {
     return;
   }
 
-  // ✅ Si ya dimos precio y el usuario eligi├│ método, respondemos método sin volver a preguntar cantidad
+  // ✅ Si ya dimos precio y el usuario eligió mtodo, respondemos mtodo sin volver a preguntar cantidad
   if (stage === "PRICE_GIVEN") {
     const tt = t.toLowerCase();
 
     if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
       const quote = lastPriceQuote.get(wa_id);
 
-      // (opcional) si no hay quote, igual respondemos método sin inventar total
+      // (opcional) si no hay quote, igual respondemos mtodo sin inventar total
       const resumen = quote?.total
         ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
         : "";
@@ -1416,7 +1432,7 @@ if (type === "text") {
       if (tt.includes("nequi")) {
         const reply = await withGreeting(
           wa_id,
-          `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+          `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envame el comprobante + tu nombre completo + municipio + celular.`
         );
 
         // 🔹 LOG OUT
@@ -1429,7 +1445,7 @@ if (type === "text") {
       // daviplata
       const reply = await withGreeting(
         wa_id,
-        `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+        `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envame el comprobante + tu nombre completo + municipio + celular.`
       );
 
       // 🔹 LOG OUT
@@ -1441,7 +1457,7 @@ if (type === "text") {
   }
 
   // ------------------------------------------------------------
-  // 5) TODO LO DEM├üS: IA (tu prompt manda)
+  // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
   const aiReplyRaw = await askOpenAIM(wa_id, text, state);
@@ -1472,14 +1488,14 @@ if (type === "image") {
   try {
     cls = await classifyPaymentImage({ mediaId });
   } catch (e) {
-    console.warn("⚠️ Clasificaci├│n falló, continúo como DUDA:", e?.message || e);
+    console.warn("⚠️ Clasificación fall, contino como DUDA:", e?.message || e);
 
     // 🔹 LOG OUT (solo monitoreo)
     await safeConversationLog("OUT", wa_id, `⚠️ Error clasificando imagen: ${String(e?.message || e).slice(0, 300)}`);
   }
 
   setLastImageLabel(wa_id, cls.label);
-  console.log("🧠 Clasificaci├│n imagen:", cls);
+  console.log("🧠 Clasificación imagen:", cls);
 
   if (cls.label === "PUBLICIDAD") {
     const reply = await withGreeting(
@@ -1497,7 +1513,7 @@ if (type === "image") {
   if (cls.label !== "COMPROBANTE") {
     const reply = await withGreeting(
       wa_id,
-      "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
+      "👀 No logro confirmar si es un comprobante.\nPor favor envame una captura clara del recibo de pago."
     );
 
     // 🔹 LOG OUT
@@ -1507,7 +1523,7 @@ if (type === "image") {
     return;
   }
 
-  // ✅ Aqu├¡ crear referencia si es comprobante
+  // ✅ Aquí crear referencia si es comprobante
   const { ref } = await createReference({
     wa_id,
     last_msg_type: "image",
@@ -1517,7 +1533,7 @@ if (type === "image") {
 
   const reply = await withGreeting(
     wa_id,
-    `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago está en revisión.`
+    `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago est en revisin.`
   );
 
   // 🔹 LOG OUT
@@ -1538,7 +1554,7 @@ if (type === "document") {
 
   const reply = await withGreeting(
     wa_id,
-    "📄 Recibí un documento. Por favor envíame el comprobante como *imagen/captura* para procesarlo más rápido."
+    "📄 Recib un documento. Por favor envame el comprobante como *imagen/captura* para procesarlo más rpido."
   );
 
   // 🔹 LOG OUT
@@ -1554,7 +1570,7 @@ await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` }
 
 const reply = await withGreeting(
   wa_id,
-  "✅ Recibido. Por favor envíame un mensaje de texto o una imagen del comprobante para ayudarte."
+  "✅ Recibido. Por favor envame un mensaje de texto o una imagen del comprobante para ayudarte."
 );
 
 // 🔹 LOG OUT
@@ -1573,7 +1589,7 @@ await sendText(wa_id, reply);
 app.post("/telegram-webhook", async (req, res) => {
   try {
     if (!TELEGRAM_SECRET_TOKEN) {
-      console.error("❌ TELEGRAM_SECRET_TOKEN no está configurado (obligatorio).");
+      console.error("❌ TELEGRAM_SECRET_TOKEN no est configurado (obligatorio).");
       return res.sendStatus(500);
     }
     const incoming = req.headers["x-telegram-bot-api-secret-token"];
@@ -1598,22 +1614,22 @@ app.post("/telegram-webhook", async (req, res) => {
     const ref = extractRef(caption);
 
     if (!file_id) {
-      if (chat_id) await telegramSendMessage(chat_id, "⚠️´©Å Debes enviar una *foto* de la boleta.");
+      if (chat_id) await telegramSendMessage(chat_id, "⚠️ Debes enviar una *foto* de la boleta.");
       return;
     }
     if (!ref) {
-      if (chat_id) await telegramSendMessage(chat_id, "⚠️´©Å Falta la referencia en el caption. Ej: RP-240224-001");
+      if (chat_id) await telegramSendMessage(chat_id, "⚠️ Falta la referencia en el caption. Ej: RP-240224-001");
       return;
     }
 
     const found = await findRowByRef(ref);
     if (!found) {
-      if (chat_id) await telegramSendMessage(chat_id, `❌ No encontr├® esa referencia en la hoja: ${ref}`);
+      if (chat_id) await telegramSendMessage(chat_id, `❌ No encontr® esa referencia en la hoja: ${ref}`);
       return;
     }
 
     if (found.state !== "APROBADO" && found.state !== "BOLETA_ENVIADA") {
-      if (chat_id) await telegramSendMessage(chat_id, `⚠️´©Å La referencia ${ref} está en estado: ${found.state}. Primero debe estar APROBADO.`);
+      if (chat_id) await telegramSendMessage(chat_id, `⚠️ La referencia ${ref} está en estado: ${found.state}. Primero debe estar APROBADO.`);
       return;
     }
 
@@ -1621,13 +1637,13 @@ app.post("/telegram-webhook", async (req, res) => {
     const imgBuffer = await telegramDownloadFileBuffer(file_path);
 
     const mediaId = await whatsappUploadImageBuffer(imgBuffer, "image/jpeg");
-    await sendImageByMediaId(found.wa_id, mediaId, `ƒÄƒ´©Å Boleta enviada ✅ (${ref})`);
+    await sendImageByMediaId(found.wa_id, mediaId, `🎟️ Boleta enviada ✅ (${ref})`);
 
     if (found.state !== "BOLETA_ENVIADA") {
       await updateCell(`D${found.rowNumber}`, "BOLETA_ENVIADA");
     }
 
-    if (chat_id) await telegramSendMessage(chat_id, `✅ Envi├® la boleta al cliente (${found.wa_id}) y marqu├® BOLETA_ENVIADA. (${ref})`);
+    if (chat_id) await telegramSendMessage(chat_id, `✅ Envi® la boleta al cliente (${found.wa_id}) y marqu® BOLETA_ENVIADA. (${ref})`);
   } catch (err) {
     console.error("❌ /telegram-webhook error:", err);
   }
