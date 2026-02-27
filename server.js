@@ -1527,51 +1527,59 @@ if (type === "image") {
   }
 
   if (cls.label !== "COMPROBANTE") {
-    const reply = await withGreeting(
-      wa_id,
-      "👀 No logro confirmar si es un comprobante.\nPor favor envame una captura clara del recibo de pago."
-    );
-
-    // 🔹 LOG OUT
-    await safeConversationLog("OUT", wa_id, reply);
-
-    await sendText(wa_id, reply);
-    return;
-  }
-
-  // ✅ Aquí crear referencia si es comprobante
-  const { ref } = await createReference({
-    wa_id,
-    last_msg_type: "image",
-    receipt_media_id: mediaId,
-    receipt_is_payment: "YES",
-  });
-
-  // ✅ Enviar comprobante a Telegram (grupo de comprobantes)
-try {
-  const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
-  const { buf } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
-
-  const caption = `🧾 NUEVO COMPROBANTE
-📱 Cliente: ${wa_id}
-📌 Referencia: ${ref}
-✅ Revisar y aprobar.`;
-
-  await telegramSendPhotoBuffer(TELEGRAM_CHAT_ID, buf, caption);
-} catch (e) {
-  console.error("❌ No pude enviar comprobante a Telegram:", e?.message || e);
-}
-
   const reply = await withGreeting(
     wa_id,
-    `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago est en revisin.`
+    "👀 No logro confirmar si es un comprobante.\nPor favor envíame una captura clara del recibo de pago."
   );
 
   // 🔹 LOG OUT
   await safeConversationLog("OUT", wa_id, reply);
 
-  await sendText(wa_id, reply, ref);
+  await sendText(wa_id, reply);
   return;
+}
+
+// ✅ Aquí crear referencia si es comprobante
+const { ref } = await createReference({
+  wa_id,
+  last_msg_type: "image",
+  receipt_media_id: mediaId,
+  receipt_is_payment: "YES",
+});
+
+// ✅ Enviar comprobante a Telegram (grupo de comprobantes)
+try {
+  const chatId = TELEGRAM_CHAT_ID || process.env.TELEGRAM_CHAT_ID; // ✅ ADICIÓN SEGURA
+  console.log("📤 Enviando comprobante a Telegram...", { chatId, wa_id, ref, mediaId }); // ✅ ADICIÓN SEGURA
+
+  if (!chatId) {
+    console.error("❌ TELEGRAM_CHAT_ID no está configurado, no puedo enviar comprobante.");
+  } else {
+    const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
+    const { buf } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
+
+    const caption = `🧾 NUEVO COMPROBANTE
+📱 Cliente: ${wa_id}
+📌 Referencia: ${ref}
+✅ Revisar y aprobar.`;
+
+    await telegramSendPhotoBuffer(chatId, buf, caption);
+    console.log("✅ Comprobante enviado a Telegram", { chatId, ref }); // ✅ ADICIÓN SEGURA
+  }
+} catch (e) {
+  console.error("❌ No pude enviar comprobante a Telegram:", e?.message || e);
+}
+
+const reply = await withGreeting(
+  wa_id,
+  `✅ Comprobante recibido.\n\n📌 Referencia de pago: ${ref}\n\nTu pago está en revisión.`
+);
+
+// 🔹 LOG OUT
+await safeConversationLog("OUT", wa_id, reply);
+
+await sendText(wa_id, reply, ref);
+return;
 }
 
 // =========================
