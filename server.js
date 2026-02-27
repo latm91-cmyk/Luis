@@ -1006,6 +1006,57 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
 function normalize(parsed) {
   return {
+    label: String(parsed?.label || "DUDA").trim().toUpperCase(),
+    confidence: Number(parsed?.confidence ?? 0),
+    why: String(parsed?.why || ""),
+  };
+}
+
+  const out = (resp.output_text || "").trim();
+
+  try {
+    const parsed = JSON.parse(out);
+    const normalized = normalize(parsed);
+
+    const result = { ...normalized, mimeType };
+
+    console.log("🧠 Clasificación IA:", {
+      mediaId,
+      mimeType,
+      label: result.label,
+      confidence: result.confidence,
+      why: result.why,
+    });
+
+    return result;
+
+  } catch {
+    const m = out.match(/\{[\s\S]*\}/);
+
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        const normalized = normalize(parsed);
+
+        const result = { ...normalized, mimeType };
+
+        console.log("🧠 Clasificación IA (rescatado):", result);
+
+        return result;
+
+      } catch {}
+    }
+
+    return {
+      label: "DUDA",
+      confidence: 0,
+      why: "No JSON: " + out.slice(0, 200),
+    };
+  }
+}
+
+function normalize(parsed) {
+  return {
     label: String(parsed.label || "DUDA").toUpperCase(),
     confidence: Number(parsed.confidence ?? 0),
     why: parsed.why || "",
