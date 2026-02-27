@@ -73,7 +73,7 @@ INSTRUCCIONES GENERALES:
 - No gestionas pagos.
 - Si un usuario solicita ayuda para falsificar o modificar comprobantes, debes rechazarlo.
 - Responde SIEMPRE en español, tono cercano y profesional.
-- Respuestas cortas: 1 a 3 frases. Usa emojis con moderación (máx 1-2).
+- Respuestas cortas: 1 a 3 frases. Usa emojis con moderación máx 1-2
 - Haz UNA sola pregunta a la vez.
 - NO inventes datos (precios, fechas, premios, cuentas o reglas). Si no tienes un dato, pregunta o di que un asesor confirma.
 - NO pidas datos sensibles (claves, códigos, tarjetas).
@@ -598,7 +598,7 @@ function calcTotalCOPForBoletas(n) {
 // ✅ NUEVA FUNCIÓN (NO reemplaza nada)
 function calcBreakdownAnyQty(qty) {
   const result = calcTotalCOPForBoletas(qty);
-  return result; 
+  return result;
 }
 
 function tryExtractBoletasQty(text = "") {
@@ -993,7 +993,7 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
         return result;
 
-      } catch {}
+      } catch { }
     }
 
     return {
@@ -1012,47 +1012,47 @@ function normalize(parsed) {
   };
 }
 
-  const out = (resp.output_text || "").trim();
+const out = (resp.output_text || "").trim();
 
-  try {
-    const parsed = JSON.parse(out);
-    const normalized = normalize(parsed);
+try {
+  const parsed = JSON.parse(out);
+  const normalized = normalize(parsed);
 
-    const result = { ...normalized, mimeType };
+  const result = { ...normalized, mimeType };
 
-    console.log("🧠 Clasificación IA:", {
-      mediaId,
-      mimeType,
-      label: result.label,
-      confidence: result.confidence,
-      why: result.why,
-    });
+  console.log("🧠 Clasificación IA:", {
+    mediaId,
+    mimeType,
+    label: result.label,
+    confidence: result.confidence,
+    why: result.why,
+  });
 
-    return result;
+  return result;
 
-  } catch {
-    const m = out.match(/\{[\s\S]*\}/);
+} catch {
+  const m = out.match(/\{[\s\S]*\}/);
 
-    if (m) {
-      try {
-        const parsed = JSON.parse(m[0]);
-        const normalized = normalize(parsed);
+  if (m) {
+    try {
+      const parsed = JSON.parse(m[0]);
+      const normalized = normalize(parsed);
 
-        const result = { ...normalized, mimeType };
+      const result = { ...normalized, mimeType };
 
-        console.log("🧠 Clasificación IA (rescatado):", result);
+      console.log("🧠 Clasificación IA (rescatado):", result);
 
-        return result;
+      return result;
 
-      } catch {}
-    }
-
-    return {
-      label: "DUDA",
-      confidence: 0,
-      why: "No JSON: " + out.slice(0, 200),
-    };
+    } catch { }
   }
+
+  return {
+    label: "DUDA",
+    confidence: 0,
+    why: "No JSON: " + out.slice(0, 200),
+  };
+}
 
 function normalize(parsed) {
   return {
@@ -1117,7 +1117,7 @@ async function monitorAprobados() {
 
       if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
         await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta. 🙌");
-        await updateCell(`H${ i + 1 } `, "NOTIFIED_APROBADO");
+        await updateCell(`H${i + 1} `, "NOTIFIED_APROBADO");
       }
     }
   } catch (err) {
@@ -1135,9 +1135,9 @@ function extractRef(text = "") {
 async function telegramSendMessage(chat_id, text) {
   if (!TELEGRAM_BOT_TOKEN) return;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-  method: "POST",
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ chat_id, text }),
+    body: JSON.stringify({ chat_id, text }),
   });
 }
 
@@ -1231,7 +1231,7 @@ app.post("/webhook", async (req, res) => {
           if (label === "OTRO") return "👀 Ese archivo no parece un comprobante.";
           return "👀 No logro confirmar si es comprobante. ¿Me envías una captura más clara?";
         }
-      } catch {}
+      } catch { }
     }
     return t;
   }
@@ -1267,7 +1267,7 @@ app.post("/webhook", async (req, res) => {
           "🎤 Recibí tu audio, pero no pude leerlo. Intenta enviarlo otra vez."
         );
         await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
+        await sendText(wa_id, reply);
         return;
       }
 
@@ -1287,262 +1287,260 @@ await sendText(wa_id, reply);
           "🎤 Recibí tu audio, pero no pude entenderlo. ¿Me lo escribes por texto, por favor?"
         );
         await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
+        await sendText(wa_id, reply);
       }
       return;
     }
 
     // =========
-// TEXT
-// =========
-if (type === "text") {
-  const text = (msg.text?.body || "").trim();
-  const t = text.toLowerCase();
+    // TEXT
+    // =========
+    if (type === "text") {
+      const text = (msg.text?.body || "").trim();
+      const t = text.toLowerCase();
 
-  // 🔹 LOG AL GRUPO DE CONVERSACIÓN
-  await sendConversationLog("IN", wa_id, text);
+      // 🔹 LOG AL GRUPO DE CONVERSACIÓN
+      await sendConversationLog("IN", wa_id, text);
 
-  // Guardar conversación
-  await saveConversation({ wa_id, direction: "IN", message: text });
+      // Guardar conversación
+      await saveConversation({ wa_id, direction: "IN", message: text });
 
-  // Estado global (Sheets) + mini-stage
-  const state = await getLatestStateByWaId(wa_id);
-  const stage = await getConversationStage(wa_id);
+      // Estado global (Sheets) + mini-stage
+      const state = await getLatestStateByWaId(wa_id);
+      const stage = await getConversationStage(wa_id);
 
-  const lastLabel = getLastImageLabel(wa_id);
+      const lastLabel = getLastImageLabel(wa_id);
 
-  // ------------------------------------------------------------
-  // 1) CONTEXTO: si venimos de una imagen clasificada como PUBLICIDAD
-  // ------------------------------------------------------------
-  if (lastLabel === "PUBLICIDAD") {
-    // Si envía link: NO confirmamos por link. Pedimos captura/nombre del perfil.
-    if (
-      t.includes("http") ||
-      t.includes("facebook.com") ||
-      t.includes("instagram.com") ||
-      t.includes("tiktok.com")
-    ) {
-      const reply = await withGreeting(
-        wa_id,
-        "🔗 Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la página/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
-      );
-      await sendText(wa_id, reply);
+      // ------------------------------------------------------------
+      // 1) CONTEXTO: si venimos de una imagen clasificada como PUBLICIDAD
+      // ------------------------------------------------------------
+      if (lastLabel === "PUBLICIDAD") {
+        // Si envía link: NO confirmamos por link. Pedimos captura/nombre del perfil.
+        if (
+          t.includes("http") ||
+          t.includes("facebook.com") ||
+          t.includes("instagram.com") ||
+          t.includes("tiktok.com")
+        ) {
+          const reply = await withGreeting(
+            wa_id,
+            "🔗 Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la página/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
+          );
+          await sendText(wa_id, reply);
 
-      setLastImageLabel(wa_id, null);
+          setLastImageLabel(wa_id, null);
+          return;
+        }
+
+        // Si menciona Facebook (sin link)
+        if (t.includes("facebook")) {
+          const reply = await withGreeting(
+            wa_id,
+            "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que publicó el anuncio (arriba del post)."
+          );
+          await sendConversationLog("OUT", wa_id, reply);
+          await sendText(wa_id, reply);
+
+          setLastImageLabel(wa_id, null);
+          return;
+        }
+
+        // Si pregunta “es de ustedes / es publicidad / si”
+        if (
+          t.includes("es publicidad") ||
+          t.includes("si es publicidad") ||
+          t.includes("es de ustedes") ||
+          t.includes("de ustedes") ||
+          t === "si" ||
+          t === "sí"
+        ) {
+          const reply = await withGreeting(
+            wa_id,
+            "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, envíame una *captura* donde se vea el *nombre del perfil/página* que lo publicó."
+          );
+          await sendConversationLog("OUT", wa_id, reply);
+          await sendText(wa_id, reply);
+
+          setLastImageLabel(wa_id, null);
+          return;
+        }
+
+        // Si no fue útil, limpiamos contexto y seguimos con IA
+        setLastImageLabel(wa_id, null);
+      }
+
+      // ------------------------------------------------------------
+      // 2) GUARDARRÍL: EN_REVISION siempre gana
+      // ------------------------------------------------------------
+      if (state === "EN_REVISION") {
+        const reply = await withGreeting(
+          wa_id,
+          "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
+        );
+        await sendConversationLog("OUT", wa_id, reply);
+        await sendText(wa_id, reply);
+        return;
+      }
+
+      // ------------------------------------------------------------
+      // CAPTURA DURA DE CANTIDAD (evita loops)
+      // Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
+      // ------------------------------------------------------------
+      const qtyCandidate = tryExtractBoletasQty(text);
+
+      // Si estamos esperando cantidad, o si el texto menciona boletas + número
+      if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
+        const qty = qtyCandidate;
+
+        // Si tu función ya soporta cualquier número, úsala:
+        // const breakdown = calcTotalCOPForBoletas(qty);
+
+        // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
+        const breakdown = calcTotalCOPForBoletas(qty);
+
+        if (!breakdown) {
+          const replyErr = await withGreeting(
+            wa_id,
+            "No entendí la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
+          );
+          await sendText(wa_id, replyErr);
+          return;
+        }
+
+        await setConversationStage(wa_id, "PRICE_GIVEN");
+
+        // ✅ Guardar el último cálculo para usarlo cuando el usuario diga "nequi" o "daviplata"
+        lastPriceQuote.set(wa_id, breakdown);
+
+        const reply = await withGreeting(
+          wa_id,
+          pricingReplyMessage(qty, breakdown) +
+          "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
+        );
+
+        await sendConversationLog("OUT", wa_id, reply);
+        await sendText(wa_id, reply);
+        return;
+      }
+
+      // ✅ Si ya dimos precio y el usuario eligió método, respondemos método sin volver a preguntar cantidad
+      if (stage === "PRICE_GIVEN") {
+        const tt = t.toLowerCase();
+
+        if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
+          const quote = lastPriceQuote.get(wa_id);
+
+          // (opcional) si no hay quote, igual respondemos método sin inventar total
+          const resumen = quote?.total
+            ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
+            : "";
+
+          if (tt.includes("nequi")) {
+            const reply = await withGreeting(
+              wa_id,
+              `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+            );
+            await sendConversationLog("OUT", wa_id, reply);
+            await sendText(wa_id, reply);
+            return;
+          }
+
+          // daviplata
+          const reply = await withGreeting(
+            wa_id,
+            `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+          );
+          await sendConversationLog("OUT", wa_id, reply);
+          await sendText(wa_id, reply);
+          return;
+        }
+      }
+
+      // ------------------------------------------------------------
+      // 5) TODO LO DEMÁS: IA (tu prompt manda)
+      //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
+      // ------------------------------------------------------------
+      const aiReplyRaw = await askOpenAIM(wa_id, text, state);
+      const aiReply = humanizeIfJson(aiReplyRaw);
+
+      const replyAI = await withGreeting(wa_id, aiReply);
+      await sendText(wa_id, replyAI);
       return;
     }
 
-    // Si menciona Facebook (sin link)
-    if (t.includes("facebook")) {
-      const reply = await withGreeting(
-        wa_id,
-        "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que publicó el anuncio (arriba del post)."
-      );
-      await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
+    // <-- SOLO AQUÍ se cierra el webhook
 
-      setLastImageLabel(wa_id, null);
-      return;
-    }
+    // ✅ ESTE ES EL ÚNICO CIERRE DEL app.post("/webhook"...)
 
-    // Si pregunta “es de ustedes / es publicidad / si”
-    if (
-      t.includes("es publicidad") ||
-      t.includes("si es publicidad") ||
-      t.includes("es de ustedes") ||
-      t.includes("de ustedes") ||
-      t === "si" ||
-      t === "sí"
-    ) {
-      const reply = await withGreeting(
-        wa_id,
-        "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, envíame una *captura* donde se vea el *nombre del perfil/página* que lo publicó."
-      );
-      await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
+    // TELEGRAM WEBHOOK (SECRET OBLIGATORIO)
+    app.post("/telegram-webhook", async (req, res) => {
+      try {
+        if (!TELEGRAM_SECRET_TOKEN) {
+          console.error("❌ TELEGRAM_SECRET_TOKEN no está configurado (obligatorio).");
+          return res.sendStatus(500);
+        }
+        const incoming = req.headers["x-telegram-bot-api-secret-token"];
+        if (incoming !== TELEGRAM_SECRET_TOKEN) {
+          return res.sendStatus(401);
+        }
 
-      setLastImageLabel(wa_id, null);
-      return;
-    }
+        res.sendStatus(200);
 
-    // Si no fue útil, limpiamos contexto y seguimos con IA
-    setLastImageLabel(wa_id, null);
-  }
+        if (!TELEGRAM_BOT_TOKEN || !sheets) return;
 
-  // ------------------------------------------------------------
-  // 2) GUARDARRÍL: EN_REVISION siempre gana
-  // ------------------------------------------------------------
-  if (state === "EN_REVISION") {
-    const reply = await withGreeting(
-      wa_id,
-      "🕒 Tu comprobante está en revisión. Te avisamos al aprobarlo."
-    );
-    await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
-    return;
-  }
+        const msg = req.body?.message;
+        if (!msg) return;
 
-// ------------------------------------------------------------
-// CAPTURA DURA DE CANTIDAD (evita loops)
-// Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
-// ------------------------------------------------------------
-const qtyCandidate = tryExtractBoletasQty(text);
+        const chat_id = msg.chat?.id;
 
-// Si estamos esperando cantidad, o si el texto menciona boletas + número
-if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
-  const qty = qtyCandidate;
+        const photos = msg.photo;
+        const best = Array.isArray(photos) ? photos[photos.length - 1] : null;
+        const file_id = best?.file_id;
 
-  // Si tu función ya soporta cualquier número, úsala:
-  // const breakdown = calcTotalCOPForBoletas(qty);
+        const caption = msg.caption || msg.text || "";
+        const ref = extractRef(caption);
 
-  // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
-  const breakdown = calcTotalCOPForBoletas(qty);
+        if (!file_id) {
+          if (chat_id) await telegramSendMessage(chat_id, "⚠️ Debes enviar una *foto* de la boleta.");
+          return;
+        }
+        if (!ref) {
+          if (chat_id) await telegramSendMessage(chat_id, "⚠️ Falta la referencia en el caption. Ej: RP-240224-001");
+          return;
+        }
 
-  if (!breakdown) {
-    const replyErr = await withGreeting(
-      wa_id,
-      "No entendí la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
-    );
-    await sendText(wa_id, replyErr);
-    return;
-  }
+        const found = await findRowByRef(ref);
+        if (!found) {
+          if (chat_id) await telegramSendMessage(chat_id, `❌ No encontré esa referencia en la hoja: ${ref}`);
+          return;
+        }
 
-  await setConversationStage(wa_id, "PRICE_GIVEN");
+        if (found.state !== "APROBADO" && found.state !== "BOLETA_ENVIADA") {
+          if (chat_id) await telegramSendMessage(chat_id, `⚠️ La referencia ${ref} está en estado: ${found.state}. Primero debe estar APROBADO.`);
+          return;
+        }
 
-// ✅ Guardar el último cálculo para usarlo cuando el usuario diga "nequi" o "daviplata"
-lastPriceQuote.set(wa_id, breakdown);
+        const file_path = await telegramGetFilePath(file_id);
+        const imgBuffer = await telegramDownloadFileBuffer(file_path);
 
-const reply = await withGreeting(
-  wa_id,
-  pricingReplyMessage(qty, breakdown) +
-  "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
-);
+        const mediaId = await whatsappUploadImageBuffer(imgBuffer, "image/jpeg");
+        await sendImageByMediaId(found.wa_id, mediaId, `🎟️ Boleta enviada ✅ (${ref})`);
 
-await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
-return;
-}
+        if (found.state !== "BOLETA_ENVIADA") {
+          await updateCell(`D${found.rowNumber}`, "BOLETA_ENVIADA");
+        }
 
-// ✅ Si ya dimos precio y el usuario eligió método, respondemos método sin volver a preguntar cantidad
-if (stage === "PRICE_GIVEN") {
-  const tt = t.toLowerCase();
+        if (chat_id) await telegramSendMessage(chat_id, `✅ Envié la boleta al cliente (${found.wa_id}) y marqué BOLETA_ENVIADA. (${ref})`);
+      } catch (err) {
+        console.error("❌ /telegram-webhook error:", err);
+      }
+    });
 
-  if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
-    const quote = lastPriceQuote.get(wa_id);
+    /* ================= START ================= */
 
-    // (opcional) si no hay quote, igual respondemos método sin inventar total
-    const resumen = quote?.total
-      ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
-      : "";
+    setInterval(monitorAprobados, 30000);
 
-    if (tt.includes("nequi")) {
-      const reply = await withGreeting(
-        wa_id,
-        `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
-      );
-      await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
-      return;
-    }
-
-    // daviplata
-    const reply = await withGreeting(
-      wa_id,
-      `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
-    );
-    await sendConversationLog("OUT", wa_id, reply);
-await sendText(wa_id, reply);
-    return;
-  }
-}
-
-   // ------------------------------------------------------------
-  // 5) TODO LO DEMÁS: IA (tu prompt manda)
-  //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
-  // ------------------------------------------------------------
-  const aiReplyRaw = await askOpenAIM(wa_id, text, state);
-  const aiReply = humanizeIfJson(aiReplyRaw);
-
-  const replyAI = await withGreeting(wa_id, aiReply);
-await sendText(wa_id, replyAI);
-return;
-}
-
- // <-- SOLO AQUÍ se cierra el webhook
-
-// ✅ ESTE ES EL ÚNICO CIERRE DEL app.post("/webhook"...)
-
-// TELEGRAM WEBHOOK (SECRET OBLIGATORIO)
-app.post("/telegram-webhook", async (req, res) => {
-  try {
-    if (!TELEGRAM_SECRET_TOKEN) {
-      console.error("❌ TELEGRAM_SECRET_TOKEN no está configurado (obligatorio).");
-      return res.sendStatus(500);
-    }
-    const incoming = req.headers["x-telegram-bot-api-secret-token"];
-    if (incoming !== TELEGRAM_SECRET_TOKEN) {
-      return res.sendStatus(401);
-    }
-
-    res.sendStatus(200);
-
-    if (!TELEGRAM_BOT_TOKEN || !sheets) return;
-
-    const msg = req.body?.message;
-    if (!msg) return;
-
-    const chat_id = msg.chat?.id;
-
-    const photos = msg.photo;
-    const best = Array.isArray(photos) ? photos[photos.length - 1] : null;
-    const file_id = best?.file_id;
-
-    const caption = msg.caption || msg.text || "";
-    const ref = extractRef(caption);
-
-    if (!file_id) {
-      if (chat_id) await telegramSendMessage(chat_id, "⚠️ Debes enviar una *foto* de la boleta.");
-      return;
-    }
-    if (!ref) {
-      if (chat_id) await telegramSendMessage(chat_id, "⚠️ Falta la referencia en el caption. Ej: RP-240224-001");
-      return;
-    }
-
-    const found = await findRowByRef(ref);
-    if (!found) {
-      if (chat_id) await telegramSendMessage(chat_id, `❌ No encontré esa referencia en la hoja: ${ref}`);
-      return;
-    }
-
-    if (found.state !== "APROBADO" && found.state !== "BOLETA_ENVIADA") {
-      if (chat_id) await telegramSendMessage(chat_id, `⚠️ La referencia ${ref} está en estado: ${found.state}. Primero debe estar APROBADO.`);
-      return;
-    }
-
-    const file_path = await telegramGetFilePath(file_id);
-    const imgBuffer = await telegramDownloadFileBuffer(file_path);
-
-    const mediaId = await whatsappUploadImageBuffer(imgBuffer, "image/jpeg");
-    await sendImageByMediaId(found.wa_id, mediaId, `🎟️ Boleta enviada ✅ (${ref})`);
-
-    if (found.state !== "BOLETA_ENVIADA") {
-      await updateCell(`D${found.rowNumber}`, "BOLETA_ENVIADA");
-    }
-
-    if (chat_id) await telegramSendMessage(chat_id, `✅ Envié la boleta al cliente (${found.wa_id}) y marqué BOLETA_ENVIADA. (${ref})`);
-  } catch (err) {
-    console.error("❌ /telegram-webhook error:", err);
-  }
-});
-
-/* ================= START ================= */
-
-setInterval(monitorAprobados, 30000);
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-});
-  }
-}
+    const PORT = process.env.PORT || 10000;
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+    });
