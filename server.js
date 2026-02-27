@@ -1529,6 +1529,8 @@ function normalize(parsed) {
     why: parsed.why || "",
   };
 }
+
+
 /* ================= OPENAI VISION: PUBLICIDAD vs COMPROBANTE ================= */
 
 async function fetchWhatsAppMediaUrl(mediaId) {
@@ -1563,9 +1565,63 @@ function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
   return `data:${mimeType};base64,${b64}`;
 }
 
+function normalizeLabel(labelRaw = "") {
+  const base = String(labelRaw)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quita tildes
+    .trim()
+    .toUpperCase();
+
+  // Mapeo de variantes comunes
+  if (["AD", "ADS", "ANUNCIO", "PUBLICIDAD", "PROMO", "PROMOCION", "BANNER", "AFICHE"].includes(base)) {
+    return "PUBLICIDAD";
+  }
+  if (["COMPROBANTE", "RECIBO", "VOUCHER", "PAGO", "PAGADO", "TRANSFERENCIA", "DEPOSITO"].includes(base)) {
+    return "COMPROBANTE";
+  }
+  if (["OTRO", "OTROS", "OTRA"].includes(base)) return "OTRO";
+  if (["DUDA", "INCIERTO", "NOSE", "NO SE", "DESCONOCIDO", "UNKNOWN"].includes(base)) return "DUDA";
+
+  // Si viene algo raro, lo dejamos en categorías válidas por seguridad
+  if (base.includes("PUBLIC")) return "PUBLICIDAD";
+  if (base.includes("COMPROB")) return "COMPROBANTE";
+
+  return base || "DUDA";
+}
+
+function normalize(parsed) {
+  return {
+    label: normalizeLabel(parsed?.label || "DUDA"),
+    confidence: Number(parsed?.confidence ?? 0),
+    why: String(parsed?.why || ""),
+  };
+}
+
+function extractOutputText(resp) {
+  // En responses API puede venir directo
+  if (typeof resp?.output_text === "string" && resp.output_text.trim()) return resp.output_text.trim();
+
+  // Fallback: intenta reconstruir desde output items
+  try {
+    const chunks = [];
+    const out = Array.isArray(resp?.output) ? resp.output : [];
+    for (const item of out) {
+      const content = Array.isArray(item?.content) ? item.content : [];
+      for (const c of content) {
+        if (c?.type === "output_text" && typeof c?.text === "string") chunks.push(c.text);
+      }
+    }
+    const joined = chunks.join("\n").trim();
+    return joined;
+  } catch {
+    return "";
+  }
+}
+
 async function classifyPaymentImage({ mediaId }) {
-  if (!openai)
+  if (!openai) {
     return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
+  }
 
   const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
   const { buf, mimeType } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
@@ -1590,12 +1646,11 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
     ],
   });
 
-  const out = (resp.output_text || "").trim();
+  const out = extractOutputText(resp);
 
   try {
     const parsed = JSON.parse(out);
     const normalized = normalize(parsed);
-
     const result = { ...normalized, mimeType };
 
     console.log("🧠 Clasificación IA:", {
@@ -1607,38 +1662,35 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
     });
 
     return result;
-
   } catch {
-    const m = out.match(/\{[\s\S]*\}/);
+    // Intento rescatar un JSON embebido
+    const m = String(out || "").match(/\{[\s\S]*\}/);
 
     if (m) {
       try {
         const parsed = JSON.parse(m[0]);
         const normalized = normalize(parsed);
-
         const result = { ...normalized, mimeType };
 
-        console.log("🧠 Clasificación IA (rescatado):", result);
+        console.log("🧠 Clasificación IA (rescatado):", {
+          mediaId,
+          mimeType,
+          label: result.label,
+          confidence: result.confidence,
+          why: result.why,
+        });
 
         return result;
-
       } catch {}
     }
 
     return {
       label: "DUDA",
       confidence: 0,
-      why: "No JSON: " + out.slice(0, 200),
+      why: "No JSON: " + String(out || "").slice(0, 200),
+      mimeType,
     };
   }
-}
-
-function normalize(parsed) {
-  return {
-    label: String(parsed.label || "DUDA").toUpperCase(),
-    confidence: Number(parsed.confidence ?? 0),
-    why: parsed.why || "",
-  };
 }
 
 // <-- SOLO AQUÍ se cierra el webhook
