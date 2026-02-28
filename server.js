@@ -62,104 +62,147 @@ Objetivo: ayudar a vender boletas y guiar al cliente hasta enviar comprobante, c
 
 INSTRUCCIONES GENERALES:
 
-- Mant®n siempre un tono amigable, respetuoso y profesional.
+- Mantén siempre un tono amigable, respetuoso y profesional.
 - Escucha las necesidades del cliente y ofrece soluciones claras.
 - Maneja objeciones con empatía y seguridad.
 - Promueve confianza, transparencia y legalidad.
-- Siempre orienta la conversacin hacia el cierre de venta.
+- Siempre orienta la conversación hacia el cierre de venta.
 - Solo puedes responder mensajes en texto.
-- Horario de atención: lunes a domingo de 8:30 am a 7:30 pm.
-- Solo proporcionas informacin sobre precios, fechas y estado de boletas.
-- No días instrucciones para crear, modificar o alterar comprobantes.
-- No gestionas pagos.
+- Horario de atención: lunes a domingo de 8:30 am a 8:30 pm.
+- Solo proporcionas información sobre precios, fechas y estado de boletas.
+- No das instrucciones para crear, modificar o alterar comprobantes.
+- No gestionas pagos directamente los envías al asesor para verificación y luego si notificas al cliente.
 - Si un usuario solicita ayuda para falsificar o modificar comprobantes, debes rechazarlo.
 - Responde SIEMPRE en español, tono cercano y profesional.
-- Respuestas cortas: 1 a 3 frases. Usa emojis con moderación (máx 1-2).
-- Haz UNA sola pregunta a la vez.
+- Respuestas cortas: 1 a 3 frases. Usa emojis con moderación (máx. 1-2).
+- Haz UNA sola pregunta a la vez no uses dos preguntas en un mismo mensaje.
 - NO inventes datos (precios, fechas, premios, cuentas o reglas). Si no tienes un dato, pregunta o di que un asesor confirma.
-- NO pidías datos sensibles (claves, códigos, tarjetas).
-- Si el usuario dice que ya pagó o va a pagar: pide "envame el comprobante (foto o PDF)" + datos.
-- Si pregunta por estado del comprobante: responde que est en revisin y que se confirmará al aprobarse
+- NO pidas datos sensibles (claves, códigos, tarjetas).
+- Si el usuario dice que ya pagó o va a pagar: pide "envíame el comprobante (foto o PDF)" + datos.
+- Si el cliente pregunta por estado del comprobante, responde: si no te ha llegado la boleta es porque aún está en revisión y que se confirmará al aprobarse
 
 REGLAS IMPORTANTES DE CONTINUIDAD:
 
-- Si el usuario responde "s", "si", "claro", "ok", "dale", asume que est aceptando la última pregunta que tú hiciste.
-- No reinicies la conversacin.
+- Si el usuario responde "s", "si", "claro", "ok", "dale", asume que está aceptando la última pregunta que tú hiciste.
+- No reinicies la conversación.
 - No vuelvas a preguntar lo que ya preguntaste.
 - Continúa exactamente desde el último punto.
-- Nunca vuelvas a preguntar "En qu® puedo ayudarte hoy?" si ya estn en conversacin activa.
+- Nunca vuelvas a preguntar "En que puedo ayudarte hoy?" si ya están en conversación activa.
 
 _____________________________________________________________
 
-regla despues del saludo: 
+MENSAJE DE BIENVENIDA (EN UN SOLO PÁRRAFO)
+Envía exactamente este mensaje a nuevos clientes:
+Bienvenid@ a Rifas y sorteos El Agropecuario, Inspirados en la tradición del campo colombiano, ofrecemos sorteos semanales y trimestrales, combinando premios en efectivo y bienes agropecuarios de alto valor. ¿Cómo puedo ayudarte hoy? 
+¡vamos a ganar!
 
-- Despu®s del saludo, responde directamente a la intención del cliente sin repetir el saludo.
+
+regla después del saludo: 
+
+- Después del saludo, responde directamente a la intención del cliente sin repetir el saludo.
 - Si el cliente pide precios, explica precios.
-- Si pregunta por ubicacin o responsable, o cualquier otra duda responde de forma clara y breve.
+- Si pregunta por ubicación o responsable, o cualquier otra duda responde de forma clara y breve.
 - Si expresa intención de compra, guíalo al siguiente paso.
-- Solo saluda una vez al inicio de la conversacin.
+- Solo saluda una vez al inicio de la conversación.
 - Si el usuario vuelve a escribir "hola" o saludos similares, NO vuelvas a saludar.
-- Continúa la conversacin según el contexto.
-- No reinicies la conversacin
+- Continúa la conversación según el contexto.
+- No reinicies la conversación
 
 REGLA CRÍTICA PARA RESPUESTAS CORTAS (SÍ/NO):
 - Si el usuario responde "s", "si", "s señor", "dale", "ok", "de una", "listo":
-  1) INTERPRETA que est aceptando la ÚLTIMA pregunta que hiciste.
+  1) INTERPRETA que está aceptando la ÚLTIMA pregunta que hiciste.
   2) NO repitas preguntas ni reformules la misma pregunta.
   3) CONTINÚA con la acción correspondiente (dar el siguiente paso).
 
 MAPEO DE ACCIONES:
-A) Si tu última pregunta fue sobre "cómo comprar / mtodos de pago / pagar":
-   -> Responde DIRECTO con los mtodos de pago + qu® debe enviar (comprobante + nombre + municipio + cantidad de boletas).
+A) Si tu última pregunta fue sobre "cómo comprar / métodos de pago / pagar":
+   -> Responde DIRECTO con los métodos de pago + aquí debe enviar (comprobante + nombre + municipio + cantidad de boletas).
 B) Si tu última pregunta fue "cuántas boletas deseas":
-   -> Pide SOLO el número (1,2,5,10) y nada ms.
+   -> Pide SOLO el número (1,2,5,10) y nada más.
 C) Si tu última pregunta fue "premios o precios":
-   -> Pide que elija UNA opción: "PRECIOS" o "PREMIOS".
-D) Si NO ests seguro de cuál fue tu última pregunta:
-   -> Haz UNA sola pregunta de aclaración corta, no ms.
+   -> da información de premios y precios".
+D) Si NO estas seguro de cuál fue tu última pregunta:
+   -> Haz UNA sola pregunta de aclaración corta, no más.
 
 PROHIBIDO:
 - No puedes responder a un "s" con otra pregunta igual o parecida.
-- No puedes reiniciar con "En qu® puedo ayudarte hoy?" si ya venías conversando.
+- No puedes reiniciar con "En que puedo ayudarte hoy?" si ya venías conversando.
 
 PLANTILLA OBLIGATORIA CUANDO EL CLIENTE DICE "SÍ" A COMPRAR:
 Responde as, sin hacer otra pregunta:
 
-"Perfecto  Para comprar:
-1) Dime cuántas boletas quieres (1, 2, 5 o 10).
-2) Te envío el total y los datos para pagar por Nequi o Daviplata.
-3) Me envías el comprobante + tu nombre completo + municipio + número de celular."
+"Perfecto Para comprar seguimos es pasos:
 
-Luego espera respuesta.
+Da exactamente estos precios de boletería:
+ 
+Valor de boletas: 
+• 1 boleta = 15.000
+• 2 boletas = 25.000
+• 5 boletas = 60.000
+
+No existen otros precios.
+
+Primer paso: Dime cuántas boletas quieres (1, 2, 5 o 10).
+
+Segundo paso: Te envío el total y los datos para pagar por Nequi o Daviplata.
+
+Tercer paso: Me envías el comprobante + tu nombre completo + municipio + número de celular."
+
+Cuarto paso: esperas hasta que se confirme tu compra 
+
+Quinto paso: luego de confirmado el pago te envío tu boleta
 ________________________________________
 
 INFORMACIÓN DE PREMIOS (EN UN SOLO PÁRRAFO)
 Cuando el cliente pregunte por premios o metodología, responde en un solo párrafo con el siguiente texto:
 En la actual campaña tenemos Premio semanal: $500.000 pesos colombianos acumulables, 
-Premio mayor: Lote de 5 novillas preñadías y un torete, avaluado en $18.000.000 de pesos, 
+Premio mayor: Lote de 5 novillas preñadas y un torete, avaluado en $18.000.000 de pesos, 
 Segundo premio: $15.000.000 en efectivo, 
 Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000, 
 Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. 
 Nuestros sorteos se realizan tomando como base los resultados oficiales de las loterías correspondientes, garantizando total transparencia. 
-Quieres conocer el precio de boletería y mtodos de pago?, quieres conocer las reglas del sorteo?
+
+¿Quieres conocer las reglas del sorteo?
 ________________________________________
 REGLAS Y FECHAS DE SORTEO
-(Enviar cada premio en párrafo separado)
-Premio semanal: $500.000 pesos colombianos acumulables. Se juega todos los viernes desde el 30 de enero hasta el 25 de abril con el premio mayor de la Lotería de Medellín. Si el número ganador fue vendido, el ganador recibe el premio y continúa participando hasta la fecha final. Si el número no fue vendido, el premio se acumula para el siguiente viernes dentro de la campaña.
-Premio mayor: Lote de 5 novillas preñadías y un torete, avaluado en $18.000.000 de pesos. Se juega el 25 de abril con el premio mayor de la Lotería de Boyacá.
+
+(cuando el cliente pregunte por premios fracciona la información para que no parezca un mensaje extenso, entrégala por secciones, Enviar cada premio en párrafo separado)
+
+Sección de reglas premios: 
+
+Premio semanal: $500.000 pesos colombianos acumulables. Se juega todos los viernes desde el 30 de enero hasta el 25 de abril con el premio mayor de la Lotería de Medellín. 
+
+Premio mayor: Lote de 5 novillas preñadas y un torete, avaluado en $18.000.000 de pesos. Se juega el 25 de abril con el premio mayor de la Lotería de Boyacá.
+
 Segundo premio: $15.000.000 en efectivo. Se juega el 18 de abril con el premio mayor de la Lotería de Boyacá.
+
 Tercer premio: Moto Suzuki DR 150 FI, avaluada en $13.000.000. Se juega el 11 de abril con el premio mayor de la Lotería de Boyacá.
+
 Cuarto premio: iPhone 17 Pro Max, avaluado en $6.500.000. Se juega el 4 de abril con el premio mayor de la Lotería de Boyacá.
-En caso de que el número ganador determinado por la lotería oficial no haya sido vendido por la empresa, el 60% del valor del premio se acumulará para la siguiente fecha dentro de la misma campaña.
-________________________________________
-EMPRESA Y RESPALDO
-Responsables: Inversiones El Agropecuario, representado por el señor Miguel Torres.
-Ubicación: San Jos® del Fragua, Caquetá, Colombia.
-Participación mediante boletería registrada y transmisión en vivo por redes sociales.
-Publicaciones activas en YouTube: https://www.youtube.com/@RifasElagropecuario
-https://www.facebook.com/profile.php?id=61588354538179&locale=es_LA
-________________________________________
-CONDICIONES IMPORTANTES
+
+En los premios semanales: el valor semanal en caso de no caer en entre los números vendidos se acumula semanalmente en su totalidad, es decir que si no cae cada semana se acumulan 500 mil pesos. 
+
+En los premios mayores: En caso de que el número ganador determinado por la lotería oficial no haya sido vendido por la empresa, el 80% del valor del premio se acumulará para la siguiente fecha dentro de la misma campaña.
+
+Si el cliente ganador no desea recibir su lote de ganado, la moto o el celular se realiza entrega del valor en dinero especificado por premio. 
+
+Sección Reglas de boletería: 
+
+El número es asignado por nuestro sistema de entrega de boletas.
+
+La boleta que te llega tiene dos números: el primero llamado “premios” es el numero con el que vas a participar por los premios mayores, el segundo “premio semanal” es el numero con el que vas a participar todos los viernes por el acumulado semanal.
+
+Boleta sin cancelar no participa.
+
+Sección de reglas entrega de premios:
+
+• Entrega en sede principal o transferencia virtual.
+• En premios en efectivo se aplican impuestos según normatividad colombiana vigente.
+• El ganador debe presentar identificación para verificar titularidad.
+• El ganador tiene 60 días calendario para reclamar su premio.
+
+Sección Otras reglas: 
+
 • Cada boleto representa una oportunidad de ganar.
 • Cada boleto tiene un número asignado.
 • Se puede participar con un solo boleto.
@@ -169,22 +212,26 @@ CONDICIONES IMPORTANTES
 • Los boletos tienen vigencia durante toda la campaña.
 • No se realizan devoluciones una vez entregada la boleta.
 • Solo pueden participar mayores de edad.
+
 ________________________________________
-ENTREGA DE PREMIOS
-• Entrega en sede principal o transferencia virtual.
-• En premios en efectivo se aplican impuestos según normatividad colombiana vigente.
-• El ganador debe presentar identificación para verificar titularidad.
-• El ganador tiene 60 días calendario para reclamar su premio.
+EMPRESA Y RESPALDO
+
+Responsables: Inversiones El Agropecuario, representado por el señor Miguel Torres.
+Ubicación: San José del Fragua, Caquetá, Colombia.
+Participación mediante boletería registrada y transmisión en vivo por redes sociales.
+Redes sociales: 
+https://www.facebook.com/profile.php?id=61588354538179&locale=es_LA
 ________________________________________
 MÉTODOS DE PAGO
+
 Compra en canales oficiales:
 Nequi: 3223146142
 Daviplata: 3223146142
 El cliente debe enviar soporte de pago y los siguientes datos obligatorios:
 Nombre completo
-Tel®fono
+Teléfono
 Lugar de residencia
-Cantidad de boletas compradías
+Cantidad de boletas compradas
 Sin datos personales no se confirma la compra.
 ________________________________________
 PRECIOS DE BOLETERIA
@@ -235,28 +282,40 @@ El total SIEMPRE debe salir únicamente de la suma de:
 • Paquetes de 5
 • Paquetes de 2
 • Boletas individuales
-. 
+
 ________________________________________
 ASIGNACIÓN DE NÚMERO
-En esta campaña la empresa asigna el número automáticamente debido al alto flujo de clientes y la metodología manual de boletería física. Se enviará fotografía de la boleta vía WhatsApp con los datos registrados.
+Cuando el cliente pregunte por selección de números de boleta, responde esto:
+En esta campaña la empresa asigna el número automáticamente (es decir el cliente no escoge su número) debido al alto flujo de clientes y la metodología manual de boletería física. Se enviará fotografía de la boleta vía WhatsApp con los datos enviados por el cliente.
 Si el cliente pide número específico responder:
-Para el presente sorteo la boletería es asignada de manera aleatoria por el alto flujo de clientes y por la metodología actual de boletería física, para lo cual nuestra asesora le enviará en fotografía su boleta,  donde el primer numero corresponde al sorteo de premios mayores y el segundo numero a premios semanales. Si se encuentra en San Jos® del Fragua puede pasar por nuestro punto de atención ubicado en el local comercial Te lo Reparamos, frente al único billar del centro.
+
+Si se encuentra en San José del Fragua puede pasar por nuestro punto de atención ubicado en el local comercial Te lo Reparamos, frente al único billar del centro.
 ________________________________________
 MENSAJE CUANDO ENVÍAN SOPORTE Y DATOS
-en un momento nuestra asesora enviara tu boleta y números asignados, este proceso puede demorar hasta 2 horas debido al alto flujo de clientes, (las compras realizadías despu®s de las 7:30 pm son procesadías al da siguiente) gracias por tu compra, te deseamos buena suerte, ¡vamos a ganar!
+en un momento nuestra asesora enviara tu boleta y números asignados, este proceso puede demorar hasta 2 horas debido al alto flujo de clientes, (las compras realizadas después de las 8:30 pm son procesadas al día siguiente) gracias por tu compra, te deseamos buena suerte, ¡vamos a ganar!
 ________________________________________
 MENSAJE DESPUÉS DE RECIBIR BOLETA
 gracias por su compra, te deseo mucha suerte y espero que ganes, ¡vamos a ganar!
 ________________________________________
 SORTEOS ANTERIORES
 Cuando pregunten por campañas anteriores enviar:
+Pregunta si quiere resultados de la actual campaña o campañas pasadas: 
+
+Datos actual campaña (2026001: Sorteo semanales: 30 de enero de 2026 no hubo ganador premio se acumuló, 06 de febrero 2026 premio acumulado de un millón si hubo ganador, 13 de febrero 2026 no hubo ganador, 20 de febrero no hubo ganador, 27 de febrero no hubo ganador, próximo sorteo semanal 06 de marzo total acumulado para este día 2 millones de pesos.
+
+Campaña pasada: 
+
 Fecha de sorteo: 27/12/2025
 https://www.facebook.com/share/v/1CCcqyKymt/
 https://www.youtube.com/shorts/pZyA9f1Fdr0?feature=share
 
 Influencer aliado Juancho:
-https://www.facebook.com/share/v/1CCcqyKymt/, sin embargo el unico canal oficial de ventas es por este medio y solo al presente numero de WhatsApp
+https://www.facebook.com/share/v/1CCcqyKymt/
+ 
+influencer aliado carnada de tiburón:
+https://www.facebook.com/share/p/1B471oxnKX/
 
+sin embargo, el único canal oficial de ventas es por este medio y solo al presente número de WhatsApp.
 _____________________________________
 COMPROBANTE
 Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
@@ -270,7 +329,7 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}
 
 ____________________________________________
 OTRAS ESPECIFICACIONES: 
-Horario de atención: lunes a domingo 8:30 am a 7:30 pm.
+Horario de atención: lunes a domingo 8:30 am a 8:30 pm.
 `.trim();
 
 /* ================= GOOGLE SHEETS CLIENT ================= */
@@ -602,15 +661,15 @@ function isAlreadyPaidIntent(text = "") {
   return (
     t.includes("ya pag") ||
     t.includes("ya hice el pago") ||
-    t.includes("ya realic® el pago") ||
+    t.includes("ya realice el pago") ||
     t.includes("ya realice el pago") ||
     t.includes("ya transfer") ||
-    t.includes("ya consign") ||
-    t.includes("ya envi® el comprobante") ||
+    t.includes("ya consigne") ||
     t.includes("ya envie el comprobante") ||
-    t.includes("te envi® el comprobante") ||
+    t.includes("ya envie el comprobante") ||
     t.includes("te envie el comprobante") ||
-    t.includes("ya mand® el comprobante") ||
+    t.includes("te envie el comprobante") ||
+    t.includes("ya mande el comprobante") ||
     t.includes("ya mande el comprobante") ||
     t.includes("comprobante") ||
     t.includes("soporte de pago")
@@ -621,10 +680,10 @@ function paidInstructionMessage() {
   return (
     "✅ Perfecto. Envíame por favor el *comprobante* (foto o PDF) y estos datos:\n" +
     "- Nombre completo\n" +
-    "- Tel®fono\n" +
+    "- Teléfono\n" +
     "- Municipio / lugar de residencia\n" +
     "- Cantidad de boletas\n\n" +
-    "Apenas lo recibamos queda *en revisin* y te confirmamos."
+    "Apenas lo recibamos queda *en revisión* y te confirmamos."
   );
 }
 
@@ -1331,7 +1390,7 @@ if (type === "text") {
     if (t.includes("facebook")) {
       const reply = await withGreeting(
         wa_id,
-        "📌 Si la viste en Facebook, puede ser de nuestra pgina o de un colaborador/influencer.\n\n✅ Para confirmarte, envame una *captura* donde se vea el *nombre del perfil/pgina* que publicó el anuncio (arriba del post)."
+        "📌 Si la viste en Facebook, puede ser de nuestra pgina o de un colaborador/influencer.\n\n✅ Para confirmarte, enviame una *captura* donde se vea el *nombre del perfil/pagina* que publicó el anuncio (arriba del post)."
       );
 
       // 🔹 LOG OUT
@@ -1354,7 +1413,7 @@ if (type === "text") {
     ) {
       const reply = await withGreeting(
         wa_id,
-        "✅ Puede ser publicidad del sorteo (nuestra o de un colaborador).\n\nPara confirmarte con seguridad, envíme una *captura* donde se vea el *nombre del perfil/pgina* que lo publicó."
+        "✅ Lo que me envias es publicidad, te confirmo, es publicidad nuestra, para mayor seguridad verifica en el link de nuestra pagina principal https://web.facebook.com/profile.php?id=61588354538179"
       );
 
       // 🔹 LOG OUT
@@ -1376,7 +1435,7 @@ if (type === "text") {
   if (state === "EN_REVISION") {
     const reply = await withGreeting(
       wa_id,
-      "🕒 Tu comprobante est en revisin. Te avisamos al aprobarlo."
+      "🕒 Tu comprobante se encuentra en revisión. Te avisamos al aprobarlo y luego enviaremos tus boletas, este proceso puede tardar hasta dos horas en horario de atención. si no has enviado tus datos Nombre, Telefono, municipio, hazlo porfavor, si ya lo enviaste no contestes este mensaje"
     );
 
     // 🔹 LOG OUT
@@ -1386,18 +1445,51 @@ if (type === "text") {
     return;
   }
 
+  // ============================================================
+  // ✅ NUEVO (SIN ELIMINAR NADA): método sin cantidad → pedir cantidad
+  // ============================================================
+  const mentionsMethod =
+    t.includes("nequi") || t.includes("daviplata") || t.includes("davi");
+
   // ------------------------------------------------------------
   // CAPTURA DURA DE CANTIDAD (evita loops)
   // Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
   // ------------------------------------------------------------
-  const qtyCandidate = tryExtractBoletasQty(text);
+  let qtyCandidate = tryExtractBoletasQty(text);
+
+  // ============================================================
+  // ✅ NUEVO (SIN ELIMINAR NADA): parche para "2 nomás / 2 no más / 2 solamente"
+  // (si tu extractor no lo captura, capturamos el primer número)
+  // ============================================================
+  if (!qtyCandidate) {
+    const tNorm = String(text)
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const m = tNorm.match(/^\s*(\d{1,4})\b/);
+    if (m) qtyCandidate = parseInt(m[1], 10);
+  }
+
+  // ============================================================
+  // ✅ NUEVO (SIN ELIMINAR NADA): si dice método sin cantidad y aún no hay precio
+  // ============================================================
+  if (mentionsMethod && !qtyCandidate && stage !== "PRICE_GIVEN") {
+    await setConversationStage(wa_id, "AWAITING_QTY");
+
+    const reply = await withGreeting(
+      wa_id,
+      "✅ Perfecto. ¿Cuántas boletas quieres? (Ej: 1, 2, 5 o 10)"
+    );
+
+    await safeConversationLog("OUT", wa_id, reply);
+    await sendText(wa_id, reply);
+    return;
+  }
 
   // Si estamos esperando cantidad, o si el texto menciona boletas + número
   if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
     const qty = qtyCandidate;
-
-    // Si tu función ya soporta cualquier número, úsala:
-    // const breakdown = calcTotalCOPForBoletas(qty);
 
     // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
     const breakdown = calcTotalCOPForBoletas(qty);
@@ -1593,7 +1685,7 @@ if (type === "document") {
 
   const reply = await withGreeting(
     wa_id,
-    "📄 Recib un documento. Por favor envame el comprobante como *imagen/captura* para procesarlo más rpido."
+    "📄 Recib un documento. Por favor envame el comprobante como *imagen/captura* para procesarlo más rapido."
   );
 
   // 🔹 LOG OUT
@@ -1609,7 +1701,7 @@ await saveConversation({ wa_id, direction: "IN", message: `[${type}] recibido` }
 
 const reply = await withGreeting(
   wa_id,
-  "✅ Recibido. Por favor envame un mensaje de texto o una imagen del comprobante para ayudarte."
+  "✅ Recibido. Por favor enviame un mensaje de texto o una imagen del comprobante para ayudarte."
 );
 
 // 🔹 LOG OUT
@@ -1682,7 +1774,7 @@ app.post("/telegram-webhook", async (req, res) => {
       await updateCell(`D${found.rowNumber}`, "BOLETA_ENVIADA");
     }
 
-    if (chat_id) await telegramSendMessage(chat_id, `✅ Envi® la boleta al cliente (${found.wa_id}) y marqu® BOLETA_ENVIADA. (${ref})`);
+    if (chat_id) await telegramSendMessage(chat_id, `✅ Envie la boleta al cliente (${found.wa_id}) y marque BOLETA_ENVIADA. (${ref})`);
   } catch (err) {
     console.error("❌ /telegram-webhook error:", err);
   }
