@@ -1435,7 +1435,7 @@ if (type === "text") {
   if (state === "EN_REVISION") {
     const reply = await withGreeting(
       wa_id,
-      "🕒 Tu comprobante se encuentra en revisión. Te avisamos al aprobarlo y luego enviaremos tus boletas, este proceso puede tardar hasta dos horas en horario de atención. si no has enviado tus datos Nombre, Telefono, municipio, hazlo porfavor, si ya lo enviaste no contestes este mensaje"
+      "🕒 Tu comprobante se encuentra en revisión. Te avisamos al aprobarlo y luego enviaremos tus boletas, este proceso puede tardar hasta dos horas en horario de atención. si no has enviado tus datos Nombre, Telefono, municipio, hazlo porfavor, si ya lo enviaste no contestes este mensaje, si tuboleta ha demorado mas de 5 horas en llegarte escribe y presenta tu caso al numero 300 3960782"
     );
 
     // 🔹 LOG OUT
