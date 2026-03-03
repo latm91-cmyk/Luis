@@ -395,27 +395,27 @@ function isAdQuestion(text = "") {
    - Solo envuelve sendText y askOpenAI.
    ============================================================ */
 
-const MEMORY_MAX_MESSAGES = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
-const memory = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
+const MEMORY_MAX_MESSAGES_LEGACY_LEGACY = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
+const memory_LEGACY = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
 
-function memPush(wa_id, role, content) {
+function memPushLegacy(wa_id, role, content) {
   if (!wa_id) return;
   const text = String(content || "").trim();
   if (!text) return;
 
-  const arr = memory.get(wa_id) || [];
+  const arr = memory_LEGACY.get(wa_id) || [];
   arr.push({ role, content: text.slice(0, 1500), ts: new Date().toISOString() });
 
-  while (arr.length > MEMORY_MAX_MESSAGES) arr.shift();
-  memory.set(wa_id, arr);
+  while (arr.length > MEMORY_MAX_MESSAGES_LEGACY) arr.shift();
+  memory_LEGACY.set(wa_id, arr);
 }
 
-function memGet(wa_id) {
-  return memory.get(wa_id) || [];
+function memGetLegacy(wa_id) {
+  return memory_LEGACY.get(wa_id) || [];
 }
 
-function memClear(wa_id) {
-  memory.delete(wa_id);
+function memClearLegacy(wa_id) {
+  memory_LEGACY.delete(wa_id);
 }
 
 /**
@@ -426,7 +426,7 @@ async function sendTextM(to, bodyText, ref_id = "") {
   // llama tu función real
   const r = await sendText(to, bodyText, ref_id);
   // guarda memoria solo si envió OK (opcional)
-  memPush(to, "assistant", bodyText);
+  memPushLegacy(to, "assistant", bodyText);
   return r;
 }
 
@@ -436,23 +436,8 @@ async function sendTextM(to, bodyText, ref_id = "") {
  * Ajusta si tu askOpenAI original ya recibe (userText, state)
  */
 async function askOpenAIM(wa_id, userText, state = "BOT") {
-  // Si no hay openai, usa tu fallback original si existe
-  if (typeof openai === "undefined" || !openai) {
-    return "Te gustaría participar o conocer precios de boletas?";
-  }
-
-  const history = memGet(wa_id).map(m => ({ role: m.role, content: m.content }));
-
-  const resp = await openai.responses.create({
-    model: "gpt-4o-mini",
-    input: [
-      { role: "system", content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}` },
-      ...history,
-      { role: "user", content: userText },
-    ],
-  });
-
-  return (resp.output_text || "").trim() || "Me repites, por favor?";
+  // Delegar a askOpenAI para mantener una sola lógica de IA + memoria
+  return await askOpenAI(wa_id, userText, state);
 }
 
 /**
@@ -461,7 +446,7 @@ async function askOpenAIM(wa_id, userText, state = "BOT") {
  */
 async function onIncomingText(wa_id, text) {
   // Memoria IN
-  memPush(wa_id, "user", text);
+  memPushLegacy(wa_id, "user", text);
 
   // Si quieres tambi®n guardar en Sheets aquí, descomenta:
   // await saveConversation({ wa_id, direction: "IN", message: text });
@@ -631,7 +616,7 @@ function tryExtractBoletasQty(text = "") {
   const m1 = t.match(/(\d{1,4})\s*(boletas?|boletos?)/i);
   if (m1) return parseInt(m1[1], 10);
 
-  const m2 = t.match(/(?:quiero|comprar|llevar|dame|necesito)\s*(\d{1,4})/i);
+  const m2 = t.match(/(?:quiero|comprar|llevar|dame|necesito|deseo|quisiera|apartar|separar|apuntame|me\s*llevo)\s*(\d{1,4})/i);
   if (m2) return parseInt(m2[1], 10);
 
   const m3 = t.trim().match(/^(\d{1,4})$/);
@@ -1304,7 +1289,7 @@ if (type === "audio") {
     // 🔹 LOG OUT
     await safeConversationLog("OUT", wa_id, reply);
 
-    await sendText(wa_id, reply);
+    await sendTextM(wa_id, reply);
     return;
   }
 
@@ -1324,7 +1309,7 @@ if (type === "audio") {
     // 🔹 LOG OUT (respuesta IA)
     await safeConversationLog("OUT", wa_id, reply);
 
-    await sendText(wa_id, reply);
+    await sendTextM(wa_id, reply);
   } catch (e) {
     console.warn("Audio transcripcin fall:", e?.message || e);
 
@@ -1336,7 +1321,7 @@ if (type === "audio") {
     // 🔹 LOG OUT (error respuesta)
     await safeConversationLog("OUT", wa_id, reply);
 
-    await sendText(wa_id, reply);
+    await sendTextM(wa_id, reply);
   }
 
   return;
@@ -1387,7 +1372,7 @@ if (type === "text") {
       // 🔹 LOG OUT
       await safeConversationLog("OUT", wa_id, reply);
 
-      await sendText(wa_id, reply);
+      await sendTextM(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
       return;
@@ -1403,7 +1388,7 @@ if (type === "text") {
       // 🔹 LOG OUT
       await safeConversationLog("OUT", wa_id, reply);
 
-      await sendText(wa_id, reply);
+      await sendTextM(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
       return;
@@ -1426,7 +1411,7 @@ if (type === "text") {
       // 🔹 LOG OUT
       await safeConversationLog("OUT", wa_id, reply);
 
-      await sendText(wa_id, reply);
+      await sendTextM(wa_id, reply);
 
       setLastImageLabel(wa_id, null);
       return;
@@ -1448,7 +1433,7 @@ if (type === "text") {
     // 🔹 LOG OUT
     await safeConversationLog("OUT", wa_id, reply);
 
-    await sendText(wa_id, reply);
+    await sendTextM(wa_id, reply);
     return;
   }
 
@@ -1543,7 +1528,7 @@ if (type === "text") {
     );
 
     await safeConversationLog("OUT", wa_id, reply);
-    await sendText(wa_id, reply);
+    await sendTextM(wa_id, reply);
     return;
   }
 
@@ -1566,7 +1551,7 @@ if (type === "text") {
       // 🔹 LOG OUT
       await safeConversationLog("OUT", wa_id, replyErr);
 
-      await sendText(wa_id, replyErr);
+      await sendTextM(wa_id, replyErr);
       return;
     }
 
@@ -1577,14 +1562,13 @@ if (type === "text") {
 
     const reply = await withGreeting(
       wa_id,
-      pricingReplyMessage(qty, breakdown) +
-        "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
+      pricingReplyMessage(qty, breakdown)
     );
 
     // 🔹 LOG OUT
     await safeConversationLog("OUT", wa_id, reply);
 
-    await sendText(wa_id, reply);
+    await sendTextM(wa_id, reply);
     return;
   }
 
@@ -1609,20 +1593,20 @@ if (type === "text") {
         // 🔹 LOG OUT
         await safeConversationLog("OUT", wa_id, reply);
 
-        await sendText(wa_id, reply);
+        await sendTextM(wa_id, reply);
         return;
       }
 
       // daviplata
       const reply = await withGreeting(
         wa_id,
-        `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
+        `${resumen}📲 Paga por *Daviplata* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
       );
 
       // 🔹 LOG OUT
       await safeConversationLog("OUT", wa_id, reply);
 
-      await sendText(wa_id, reply);
+      await sendTextM(wa_id, reply);
       return;
     }
 
@@ -1634,7 +1618,7 @@ if (type === "text") {
         "✅ Súper. ¿Pagas por *Nequi* o por *Daviplata*?"
       );
       await safeConversationLog("OUT", wa_id, reply);
-      await sendText(wa_id, reply);
+      await sendTextM(wa_id, reply);
       return;
     }
   }
@@ -1643,7 +1627,7 @@ if (type === "text") {
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
-  const aiReplyRaw = await askOpenAIM(wa_id, text, state);
+  const aiReplyRaw = await askOpenAI(wa_id, text, state);
   const aiReply = humanizeIfJson(aiReplyRaw);
 
   const replyAI = await withGreeting(wa_id, aiReply);
@@ -1689,7 +1673,7 @@ if (type === "image") {
     // 🔹 LOG OUT
     await safeConversationLog("OUT", wa_id, reply);
 
-    await sendText(wa_id, reply);
+    await sendTextM(wa_id, reply);
     return;
   }
 
@@ -1702,7 +1686,7 @@ if (type === "image") {
   // 🔹 LOG OUT
   await safeConversationLog("OUT", wa_id, reply);
 
-  await sendText(wa_id, reply);
+  await sendTextM(wa_id, reply);
   return;
 }
 
@@ -1766,7 +1750,7 @@ if (type === "document") {
   // 🔹 LOG OUT
   await safeConversationLog("OUT", wa_id, reply);
 
-  await sendText(wa_id, reply);
+  await sendTextM(wa_id, reply);
   return;
 }
 
@@ -1782,7 +1766,7 @@ const reply = await withGreeting(
 // 🔹 LOG OUT
 await safeConversationLog("OUT", wa_id, reply);
 
-await sendText(wa_id, reply);
+await sendTextM(wa_id, reply);
 } catch (e) {
   console.error("❌ /webhook error:", e?.message || e);
 
