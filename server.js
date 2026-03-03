@@ -1349,10 +1349,17 @@ if (type === "text") {
   const text = (msg.text?.body || "").trim();
   const t = text.toLowerCase();
 
+  // ✅ NUEVO: normalizador (quita tildes) para comparar sin fallar
+  const tNorm = String(text)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
   // 🔹 LOG IN (texto recibido)
   await safeConversationLog("IN", wa_id, text);
 
-  // Guardar conversacin (solo una vez por mensaje)
+  // Guardar conversación (solo una vez por mensaje)
   await saveConversation({ wa_id, direction: "IN", message: text });
 
   // Estado global (Sheets) + mini-stage
@@ -1374,7 +1381,7 @@ if (type === "text") {
     ) {
       const reply = await withGreeting(
         wa_id,
-        " Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la pgina/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
+        "Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la página/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer."
       );
 
       // 🔹 LOG OUT
@@ -1390,7 +1397,7 @@ if (type === "text") {
     if (t.includes("facebook")) {
       const reply = await withGreeting(
         wa_id,
-        "📌 Si la viste en Facebook, puede ser de nuestra pgina o de un colaborador/influencer.\n\n✅ Para confirmarte, enviame una *captura* donde se vea el *nombre del perfil/pagina* que publicó el anuncio (arriba del post)."
+        "📌 Si la viste en Facebook, puede ser de nuestra página o de un colaborador/influencer.\n\n✅ Para confirmarte, envíame una *captura* donde se vea el *nombre del perfil/página* que publicó el anuncio (arriba del post)."
       );
 
       // 🔹 LOG OUT
@@ -1413,7 +1420,7 @@ if (type === "text") {
     ) {
       const reply = await withGreeting(
         wa_id,
-        "✅ Lo que me envias es publicidad, te confirmo, es publicidad nuestra, para mayor seguridad verifica en el link de nuestra pagina principal https://web.facebook.com/profile.php?id=61588354538179"
+        "✅ Lo que me enviaste es publicidad nuestra.\n\nPara mayor seguridad, verifica en nuestra página principal: https://web.facebook.com/profile.php?id=61588354538179"
       );
 
       // 🔹 LOG OUT
@@ -1425,7 +1432,7 @@ if (type === "text") {
       return;
     }
 
-    // Si no fue til, limpiamos contexto y seguimos con IA
+    // Si no fue útil, limpiamos contexto y seguimos con IA
     setLastImageLabel(wa_id, null);
   }
 
@@ -1435,7 +1442,7 @@ if (type === "text") {
   if (state === "EN_REVISION") {
     const reply = await withGreeting(
       wa_id,
-      "🕒 Tu comprobante se encuentra en revisión. Te avisamos al aprobarlo y luego enviaremos tus boletas, este proceso puede tardar hasta dos horas en horario de atención. si no has enviado tus datos Nombre, Telefono, municipio, hazlo porfavor, si ya lo enviaste no contestes este mensaje, si tuboleta ha demorado mas de 5 horas en llegarte escribe y presenta tu caso al numero 300 3960782"
+      "🕒 Tu comprobante se encuentra en revisión. Te avisamos al aprobarlo y luego enviaremos tus boletas. Este proceso puede tardar hasta 2 horas en horario de atención.\n\nSi no has enviado tus datos (Nombre, Teléfono, Municipio), hazlo por favor. Si ya los enviaste, no respondas este mensaje.\n\nSi tu boleta se demora más de 5 horas, escribe y presenta tu caso al número 300 3960782."
     );
 
     // 🔹 LOG OUT
@@ -1446,6 +1453,26 @@ if (type === "text") {
   }
 
   // ============================================================
+  // ✅ NUEVO: detectar intención fuerte de compra (evita que se vaya a IA)
+  // ============================================================
+  const buyIntent =
+    tNorm.includes("quiero") ||
+    tNorm.includes("deseo") ||
+    tNorm.includes("me llevo") ||
+    tNorm.includes("apuntame") ||
+    tNorm.includes("separam") ||
+    tNorm.includes("listo") ||
+    tNorm.includes("haga") ||
+    tNorm.includes("hagale") ||
+    tNorm.includes("de una") ||
+    tNorm.includes("particip") ||
+    tNorm.includes("comprar") ||
+    tNorm.includes("pagar") ||
+    tNorm.includes("nequi") ||
+    tNorm.includes("daviplata") ||
+    tNorm.includes("davi");
+
+  // ============================================================
   // ✅ NUEVO (SIN ELIMINAR NADA): método sin cantidad → pedir cantidad
   // ============================================================
   const mentionsMethod =
@@ -1453,33 +1480,66 @@ if (type === "text") {
 
   // ------------------------------------------------------------
   // CAPTURA DURA DE CANTIDAD (evita loops)
-  // Si el usuario manda número (ej "7" o "quiero 7 boletas"), avanzamos sin IA
   // ------------------------------------------------------------
   let qtyCandidate = tryExtractBoletasQty(text);
+
+  // ============================================================
+  // ✅ NUEVO: cantidad en letras (uno/dos/tres/…/diez) + "un par"
+  // ============================================================
+  if (!qtyCandidate) {
+    const wordMap = {
+      "una": 1,
+      "uno": 1,
+      "un": 1,
+      "dos": 2,
+      "tres": 3,
+      "cuatro": 4,
+      "cinco": 5,
+      "seis": 6,
+      "siete": 7,
+      "ocho": 8,
+      "nueve": 9,
+      "diez": 10,
+      "once": 11,
+      "doce": 12,
+    };
+
+    // "un par" => 2
+    if (tNorm.includes("un par")) qtyCandidate = 2;
+
+    // "deseo uno", "quiero dos", "dos boletas", "cinco"
+    if (!qtyCandidate) {
+      const mWord =
+        tNorm.match(/\b(una|uno|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b(?:\s*(boletas?|boletos?))?/i);
+      if (mWord) {
+        const w = mWord[1].toLowerCase();
+        if (wordMap[w]) qtyCandidate = wordMap[w];
+      }
+    }
+  }
 
   // ============================================================
   // ✅ NUEVO (SIN ELIMINAR NADA): parche para "2 nomás / 2 no más / 2 solamente"
   // (si tu extractor no lo captura, capturamos el primer número)
   // ============================================================
   if (!qtyCandidate) {
-    const tNorm = String(text)
-      .toLowerCase()
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
     const m = tNorm.match(/^\s*(\d{1,4})\b/);
     if (m) qtyCandidate = parseInt(m[1], 10);
   }
 
   // ============================================================
-  // ✅ NUEVO (SIN ELIMINAR NADA): si dice método sin cantidad y aún no hay precio
+  // ✅ NUEVO: Si hay intención de compra pero aún no tenemos cantidad y NO dimos precio
+  // Evita el loop de "mensaje largo" y empuja a cerrar.
   // ============================================================
-  if (mentionsMethod && !qtyCandidate && stage !== "PRICE_GIVEN") {
-    await setConversationStage(wa_id, "AWAITING_QTY");
+  if ((buyIntent || mentionsMethod) && !qtyCandidate && stage !== "PRICE_GIVEN") {
+    // Si no estamos esperando cantidad, la ponemos en AWAITING_QTY
+    if (stage !== "AWAITING_QTY") {
+      await setConversationStage(wa_id, "AWAITING_QTY");
+    }
 
     const reply = await withGreeting(
       wa_id,
-      "✅ Perfecto. ¿Cuántas boletas quieres? (Ej: 1, 2, 5 o 10)"
+      "✅ Perfecto. Para apartarte el número necesito la cantidad.\n\n¿Cuántas boletas quieres? (Ej: 1, 2, 5 o 10)"
     );
 
     await safeConversationLog("OUT", wa_id, reply);
@@ -1488,7 +1548,10 @@ if (type === "text") {
   }
 
   // Si estamos esperando cantidad, o si el texto menciona boletas + número
-  if (qtyCandidate && (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas"))) {
+  if (
+    qtyCandidate &&
+    (stage === "AWAITING_QTY" || t.includes("boleta") || t.includes("boletas") || buyIntent)
+  ) {
     const qty = qtyCandidate;
 
     // Si SOLO maneja 1/2/5/10, entonces hacemos "combo" (10,5,2,1)
@@ -1497,7 +1560,7 @@ if (type === "text") {
     if (!breakdown) {
       const replyErr = await withGreeting(
         wa_id,
-        "No entend la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
+        "No entendí la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10)."
       );
 
       // 🔹 LOG OUT
@@ -1515,7 +1578,7 @@ if (type === "text") {
     const reply = await withGreeting(
       wa_id,
       pricingReplyMessage(qty, breakdown) +
-      "\n\n✅ Deseas pagar por Nequi o Daviplata?"
+        "\n\n✅ ¿Deseas pagar por Nequi o Daviplata?"
     );
 
     // 🔹 LOG OUT
@@ -1525,14 +1588,14 @@ if (type === "text") {
     return;
   }
 
-  // ✅ Si ya dimos precio y el usuario eligió mtodo, respondemos mtodo sin volver a preguntar cantidad
+  // ✅ Si ya dimos precio y el usuario eligió método, respondemos método sin volver a preguntar cantidad
   if (stage === "PRICE_GIVEN") {
     const tt = t.toLowerCase();
 
     if (tt.includes("nequi") || tt.includes("daviplata") || tt.includes("davi")) {
       const quote = lastPriceQuote.get(wa_id);
 
-      // (opcional) si no hay quote, igual respondemos mtodo sin inventar total
+      // (opcional) si no hay quote, igual respondemos método sin inventar total
       const resumen = quote?.total
         ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n`
         : "";
@@ -1540,7 +1603,7 @@ if (type === "text") {
       if (tt.includes("nequi")) {
         const reply = await withGreeting(
           wa_id,
-          `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envame el comprobante + tu nombre completo + municipio + celular.`
+          `${resumen}📲 Paga por *Nequi* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
         );
 
         // 🔹 LOG OUT
@@ -1553,7 +1616,7 @@ if (type === "text") {
       // daviplata
       const reply = await withGreeting(
         wa_id,
-        `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envame el comprobante + tu nombre completo + municipio + celular.`
+        `${resumen}📲 Paga por *Daviplata* al número *TU_NUMERO_DAVIPLATA_AQUI*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`
       );
 
       // 🔹 LOG OUT
@@ -1562,7 +1625,34 @@ if (type === "text") {
       await sendText(wa_id, reply);
       return;
     }
+
+    // ✅ NUEVO: si ya dimos precio y responde “sí / listo / de una”
+    // empuja a elegir método (no se devuelve)
+    if (tt === "si" || tt === "sí" || tt.includes("listo") || tt.includes("de una") || tt.includes("dale")) {
+      const reply = await withGreeting(
+        wa_id,
+        "✅ Súper. ¿Pagas por *Nequi* o por *Daviplata*?"
+      );
+      await safeConversationLog("OUT", wa_id, reply);
+      await sendText(wa_id, reply);
+      return;
+    }
   }
+
+  // ------------------------------------------------------------
+  // 5) TODO LO DEMÁS: IA (tu prompt manda)
+  // ------------------------------------------------------------
+  const aiReplyRaw = await askOpenAIM(wa_id, text, state);
+  const aiReply = humanizeIfJson(aiReplyRaw);
+
+  const replyAI = await withGreeting(wa_id, aiReply);
+
+  // 🔹 LOG OUT (respuesta IA)
+  await safeConversationLog("OUT", wa_id, replyAI);
+
+  await sendText(wa_id, replyAI);
+  return;
+}
 
   // ------------------------------------------------------------
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
