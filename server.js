@@ -1641,21 +1641,6 @@ if (type === "text") {
 
   // ------------------------------------------------------------
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
-  // ------------------------------------------------------------
-  const aiReplyRaw = await askOpenAIM(wa_id, text, state);
-  const aiReply = humanizeIfJson(aiReplyRaw);
-
-  const replyAI = await withGreeting(wa_id, aiReply);
-
-  // 🔹 LOG OUT (respuesta IA)
-  await safeConversationLog("OUT", wa_id, replyAI);
-
-  await sendText(wa_id, replyAI);
-  return;
-}
-
-  // ------------------------------------------------------------
-  // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
   const aiReplyRaw = await askOpenAIM(wa_id, text, state);
