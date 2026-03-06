@@ -451,7 +451,7 @@ async function sendTextM(to, bodyText, ref_id = "") {
  */
 async function askOpenAIM(wa_id, userText, state = "BOT") {
   // Delegar a askOpenAI para mantener una sola lógica de IA + memoria
-  return await askOpenAI(wa_id, userText, state);
+  return await askGemini(wa_id, userText, state);
 }
 
 /**
@@ -842,6 +842,7 @@ async function updateCell(rangeA1, value) {
 async function sendText(to, bodyText, ref_id = "") {
   if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
     console.warn("⚠️ Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID");
+    console.error("❌ Error CRÍTICO: Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID. Revisa tus variables de entorno.");
     return { ok: false };
   }
 
@@ -862,6 +863,12 @@ async function sendText(to, bodyText, ref_id = "") {
   const raw = await resp.text();
   console.log(" WhatsApp send status:", resp.status);
   console.log(" WhatsApp send raw:", raw);
+  
+  if (!resp.ok) {
+    console.error(`❌ Error enviando mensaje a WhatsApp (${resp.status}):`, raw);
+  } else {
+    console.log("✅ Mensaje enviado correctamente a WhatsApp.");
+  }
 
   // OUT conversations
   await saveConversation({ wa_id: to, direction: "OUT", message: bodyText, ref_id });
@@ -1056,7 +1063,7 @@ function memGet(wa_id) {
 // =============================
 // GEMINI TEXT (con memoria)
 // =============================
-async function askOpenAI(wa_id, userText, state = "BOT") {
+async function askGemini(wa_id, userText, state = "BOT") {
 
   if (!gemini) {
     return "Te gustaría participar o conocer precios de boletas?";
@@ -1084,12 +1091,27 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
   });
 
   const output = (resp?.response?.text() || "").trim() || "Me repites, por favor?";
+  try {
+    const resp = await model.generateContent({
+      systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
+      contents,
+    });
 
   //  Guardar memoria (usuario y asistente)
   memPush(wa_id, "user", userText);
   memPush(wa_id, "assistant", output);
+    const output = (resp?.response?.text() || "").trim() || "Me repites, por favor?";
 
   return output;
+    //  Guardar memoria (usuario y asistente)
+    memPush(wa_id, "user", userText);
+    memPush(wa_id, "assistant", output);
+
+    return output;
+  } catch (error) {
+    console.error("❌ Error crítico en Gemini:", error);
+    return "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
+  }
 }
 
 /* ================= MONITOR APROBADOS ================= */
@@ -1237,6 +1259,8 @@ app.post("/webhook", async (req, res) => {
     return cleanText;
   }
 
+  // ✅ CORRECCIÓN: Declarar wa_id fuera del try para que el catch lo vea
+  let wa_id = "";
 
   // Helper: si por error la IA devuelve JSON, lo convertimos a texto humano
   function humanizeIfJson(text) {
@@ -1263,7 +1287,7 @@ app.post("/webhook", async (req, res) => {
     const msg = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!msg) return;
 
-    const wa_id = msg.from;
+    wa_id = msg.from; // Asignar valor a la variable externa
     const type = msg.type;
 
     // Si el cliente responde, cancelar recordatorio pendiente
@@ -1307,7 +1331,7 @@ if (type === "audio") {
 
     const state = await getLatestStateByWaId(wa_id);
     const stage = await getConversationStage(wa_id);
-    const aiReplyRaw = await askOpenAI(wa_id, text, state);
+    const aiReplyRaw = await askGemini(wa_id, text, state);
     const aiReply = humanizeIfJson(aiReplyRaw);
 
     const reply = await withGreeting(wa_id, aiReply);
@@ -1633,7 +1657,7 @@ if (type === "text") {
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
-  const aiReplyRaw = await askOpenAI(wa_id, text, state);
+  const aiReplyRaw = await askGemini(wa_id, text, state);
   const aiReply = humanizeIfJson(aiReplyRaw);
 
   const replyAI = await withGreeting(wa_id, aiReply);
