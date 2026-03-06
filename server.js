@@ -1133,22 +1133,16 @@ async function askGemini(wa_id, userText, state = "BOT") {
     parts: [{ text: String(userText || "") }],
   });
 
-  let output = "";
-
-  try {
-    output = await geminiGenerateContent({
-      model: GEMINI_MODEL_TEXT,
-      systemInstruction: `${SYSTEM_PROMPT}
-
-Estado actual del cliente: ${state}`,
-      contents,
-    });
-  } catch (error) {
+  const outputRaw = await geminiGenerateContent({
+    model: GEMINI_MODEL_TEXT,
+    systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
+    contents,
+  }).catch((error) => {
     console.error("❌ Error Gemini texto:", error?.message || error);
-    output = "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
-  }
+    return "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
+  });
 
-  output = String(output || "").trim() || "Me repites, por favor?";
+  const output = String(outputRaw || "").trim() || "Me repites, por favor?";
 
   // Guardar memoria (usuario y asistente)
   memPush(wa_id, "user", userText);
