@@ -5,7 +5,7 @@ const { google } = require("googleapis");
 const fetch = require("node-fetch"); // v2
 const crypto = require("crypto");
 const FormData = require("form-data");
-const OpenAI = require("openai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
 
 const app = express();
@@ -44,9 +44,11 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_SECRET_TOKEN = process.env.TELEGRAM_SECRET_TOKEN || ""; // OBLIGATORIO
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
-// OpenAI
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+// Gemini
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash";
+const GEMINI_MODEL_VISION = process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash";
+const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // Control follow-up de ventas (1 solo recordatorio)
 const followUps = new Map();
@@ -921,7 +923,7 @@ async function sendImageByMediaId(to, mediaId, caption = "") {
   return { ok: resp.ok, status: resp.status, raw };
 }
 
-/* ================= OPENAI VISION: PUBLICIDAD vs COMPROBANTE ================= */
+/* ================= GEMINI VISION: PUBLICIDAD vs COMPROBANTE ================= */
 
 async function fetchWhatsAppMediaUrl(mediaId) {
   const resp = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
@@ -950,18 +952,13 @@ async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
   };
 }
 
-function bufferToDataUrl(buffer, mimeType = "image/jpeg") {
-  const b64 = buffer.toString("base64");
-  return `data:${mimeType};base64,${b64}`;
-}
-
 async function classifyPaymentImage({ mediaId }) {
-  if (!openai)
-    return { label: "DUDA", confidence: 0, why: "OPENAI_API_KEY no configurada" };
+  if (!gemini)
+    return { label: "DUDA", confidence: 0, why: "GEMINI_API_KEY no configurada" };
 
   const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
   const { buf, mimeType } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
-  const dataUrl = bufferToDataUrl(buf, mimeType);
+  const b64Image = buf.toString("base64");
 
   const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
 Reglas:
@@ -969,20 +966,18 @@ Reglas:
 - PUBLICIDAD: afiche / promoción, banner con premios, precios, números, logo invitando a comprar.
 Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
-  const resp = await openai.responses.create({
-    model: "gpt-4o-mini",
-    input: [
-      {
-        role: "user",
-        content: [
-          { type: "input_text", text: prompt },
-          { type: "input_image", image_url: dataUrl },
-        ],
+  const model = gemini.getGenerativeModel({ model: GEMINI_MODEL_VISION });
+  const resp = await model.generateContent([
+    prompt,
+    {
+      inlineData: {
+        data: b64Image,
+        mimeType,
       },
-    ],
-  });
+    },
+  ]);
 
-  const out = (resp.output_text || "").trim();
+  const out = (resp?.response?.text() || "").trim();
 
   try {
     const parsed = JSON.parse(out);
@@ -1059,37 +1054,36 @@ function memGet(wa_id) {
 
 
 // =============================
-// OPENAI TEXT (con memoria)
+// GEMINI TEXT (con memoria)
 // =============================
 async function askOpenAI(wa_id, userText, state = "BOT") {
 
-  if (!openai) {
+  if (!gemini) {
     return "Te gustaría participar o conocer precios de boletas?";
   }
 
   const history = memGet(wa_id);
+  const contents = history
+    .map((msg) => {
+      const role = msg.role === "assistant" ? "model" : "user";
+      const text = String(msg.content || "").trim();
+      if (!text) return null;
+      return { role, parts: [{ text }] };
+    })
+    .filter(Boolean);
 
-  const resp = await openai.responses.create({
-    model: "gpt-4o-mini",
-    input: [
-      {
-        role: "system",
-        content: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
-      },
-
-      //  Memoria de conversacin
-      ...history,
-
-      //  Mensaje actual del usuario
-      {
-        role: "user",
-        content: userText,
-      },
-    ],
+  contents.push({
+    role: "user",
+    parts: [{ text: userText }],
   });
 
-  const output =
-    (resp.output_text || "").trim() || "Me repites, por favor?";
+  const model = gemini.getGenerativeModel({ model: GEMINI_MODEL_TEXT });
+  const resp = await model.generateContent({
+    systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
+    contents,
+  });
+
+  const output = (resp?.response?.text() || "").trim() || "Me repites, por favor?";
 
   //  Guardar memoria (usuario y asistente)
   memPush(wa_id, "user", userText);
