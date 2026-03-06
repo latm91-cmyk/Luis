@@ -54,10 +54,10 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 // MODELOS
 const GEMINI_MODEL_TEXT =
-  process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash-latest";
+  process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash";
 
 const GEMINI_MODEL_VISION =
-  process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash-latest";
+  process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash";
 
 // LOG PARA VERIFICAR QUE LA KEY CARGUE
 console.log("Gemini key loaded:", !!GEMINI_API_KEY);
@@ -1074,6 +1074,8 @@ async function askGemini(wa_id, userText, state = "BOT") {
   });
 
   try {
+    console.log(`🤖 Intentando conectar con modelo: ${GEMINI_MODEL_TEXT}`);
+
     // ✅ CORRECCIÓN: systemInstruction se configura al obtener el modelo
     const model = gemini.getGenerativeModel({ 
       model: GEMINI_MODEL_TEXT,
