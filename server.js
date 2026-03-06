@@ -54,7 +54,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 // MODELOS
 const GEMINI_MODEL_TEXT =
-  process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash";
+  process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash-latest";
 
 const GEMINI_MODEL_VISION =
   process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash-latest";
