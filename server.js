@@ -44,11 +44,33 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_SECRET_TOKEN = process.env.TELEGRAM_SECRET_TOKEN || ""; // OBLIGATORIO
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
-// Gemini
+// =============================
+// GEMINI CONFIG
+// =============================
+
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// API KEY
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash";
-const GEMINI_MODEL_VISION = process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash";
-const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+
+// MODELOS
+const GEMINI_MODEL_TEXT =
+  process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash-latest";
+
+const GEMINI_MODEL_VISION =
+  process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash-latest";
+
+// LOG PARA VERIFICAR QUE LA KEY CARGUE
+console.log("Gemini key loaded:", !!GEMINI_API_KEY);
+
+// INICIALIZAR GEMINI
+const gemini = GEMINI_API_KEY
+  ? new GoogleGenerativeAI(GEMINI_API_KEY)
+  : null;
+
+if (!gemini) {
+  console.warn("⚠️ GEMINI_API_KEY no configurada. Gemini deshabilitado.");
+}
 
 // Control follow-up de ventas (1 solo recordatorio)
 const followUps = new Map();
