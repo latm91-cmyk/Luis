@@ -1092,7 +1092,11 @@ async function askGemini(wa_id, userText, state = "BOT") {
 
     return output;
 
-  
+  } catch (error) {
+    console.error("❌ Error crítico en Gemini:", error);
+    return "hola, bienvenido a rifas el agropecuario, en este momento nos encontramos realizando mantenimiento a nuestro servidor, escribenos al numero 3003960782";
+  }
+}
 
 /* ================= MONITOR APROBADOS ================= */
 
