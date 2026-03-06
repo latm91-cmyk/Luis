@@ -1047,10 +1047,10 @@ function normalize(parsed) {
   };
 }
 
+// =============================
+// GEMINI TEXT (estable)
+// =============================
 
-// =============================
-// GEMINI TEXT (con memoria)
-// =============================
 async function askGemini(wa_id, userText, state = "BOT") {
 
   if (!gemini) {
@@ -1058,8 +1058,7 @@ async function askGemini(wa_id, userText, state = "BOT") {
   }
 
   const history = memGet(wa_id);
-  
-  // Convertir historial al formato de Gemini (user/model)
+
   const contents = history
     .map((msg) => {
       const role = msg.role === "assistant" ? "model" : "user";
@@ -1069,7 +1068,6 @@ async function askGemini(wa_id, userText, state = "BOT") {
     })
     .filter(Boolean);
 
-  // Agregar mensaje actual
   contents.push({
     role: "user",
     parts: [{ text: userText }],
@@ -1077,20 +1075,22 @@ async function askGemini(wa_id, userText, state = "BOT") {
 
   try {
     const model = gemini.getGenerativeModel({ model: GEMINI_MODEL_TEXT });
+
     const resp = await model.generateContent({
       systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
       contents,
     });
 
-    const output = (resp?.response?.text() || "").trim() || "Me repites, por favor?";
+    const response = await resp.response;
+    const output = (response?.text() || "").trim() || "Me repites, por favor?";
 
     console.log(`🤖 Gemini (${wa_id}):`, output);
 
-    //  Guardar memoria (usuario y asistente)
     memPush(wa_id, "user", userText);
     memPush(wa_id, "assistant", output);
 
     return output;
+
   } catch (error) {
     console.error("❌ Error crítico en Gemini:", error);
     return "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
