@@ -454,7 +454,7 @@ function isAdQuestion(text = "") {
 /* ============================================================
    MEMORIA TEMPORAL (RAM) - últimos N mensajes por cliente
    - No toca Sheets, no toca Telegram.
-   - Solo envuelve sendText y askOpenAI.
+   - Solo envuelve sendText y askGemini.
    ============================================================ */
 
 const MEMORY_MAX_MESSAGES_LEGACY = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
@@ -491,6 +491,16 @@ async function sendTextM(to, bodyText, ref_id = "") {
   // guarda memoria solo si envió OK (opcional)
   memPush(to, "assistant", bodyText);
   return r;
+}
+
+/**
+ * Wrapper: Gemini con memoria
+ * MISMA idea que askGemini(userText, state) pero recibe wa_id para saber qu® memoria usar.
+ * Ajusta si tu askGemini original ya recibe (userText, state)
+ */
+async function askGeminiM(wa_id, userText, state = "BOT") {
+  // Delegar a askGemini para mantener una sola lógica de IA + memoria
+  return await askGemini(wa_id, userText, state);
 }
 
 /**
@@ -1103,8 +1113,7 @@ function memGet(wa_id) {
 // =============================
 // GEMINI TEXT (con memoria)
 // =============================
-async function askOpenAI(wa_id, userText, state = "BOT") {
-
+async function askGemini(wa_id, userText, state = "BOT") {
   if (!GEMINI_API_KEY) {
     return "Te gustaría participar o conocer precios de boletas?";
   }
@@ -1121,32 +1130,36 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
 
   contents.push({
     role: "user",
-    parts: [{ text: userText }],
+    parts: [{ text: String(userText || "") }],
   });
 
   let output = "";
+
   try {
-    output = (
-      await geminiGenerateContent({
-        model: GEMINI_MODEL_TEXT,
-        systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
-        contents,
-      })
-    ).trim();
-  } catch (e) {
-    console.error("❌ Error Gemini texto:", e?.message || e);
+    output = await geminiGenerateContent({
+      model: GEMINI_MODEL_TEXT,
+      systemInstruction: `${SYSTEM_PROMPT}
+
+Estado actual del cliente: ${state}`,
+      contents,
+    });
+  } catch (error) {
+    console.error("❌ Error Gemini texto:", error?.message || error);
     output = "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
   }
 
-  output = output || "Me repites, por favor?";
+  output = String(output || "").trim() || "Me repites, por favor?";
 
-    return output;
+  // Guardar memoria (usuario y asistente)
+  memPush(wa_id, "user", userText);
+  memPush(wa_id, "assistant", output);
 
   } catch (error) {
     console.error("❌ Error crítico en Gemini:", error);
     return "hola, bienvenido a rifas el agropecuario, en este momento nos encontramos realizando mantenimiento a nuestro servidor, escribenos al numero 3003960782";
   }
 }
+
 
 /* ================= MONITOR APROBADOS ================= */
 
@@ -1365,7 +1378,7 @@ if (type === "audio") {
 
     const state = await getLatestStateByWaId(wa_id);
     const stage = await getConversationStage(wa_id);
-    const aiReplyRaw = await askGemini(wa_id, text, state); // Usar askGemini directamente
+    const aiReplyRaw = await askGemini(wa_id, text, state);
     const aiReply = humanizeIfJson(aiReplyRaw);
 
     const reply = await withGreeting(wa_id, aiReply);
@@ -1692,7 +1705,7 @@ if (type === "text") {
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
-  const aiReplyRaw = await askGemini(wa_id, text, state); // Usar askGemini directamente
+  const aiReplyRaw = await askGemini(wa_id, text, state);
   const aiReply = humanizeIfJson(aiReplyRaw);
 
   const replyAI = await withGreeting(wa_id, aiReply);
