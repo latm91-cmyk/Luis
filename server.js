@@ -1140,9 +1140,6 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
 
   output = output || "Me repites, por favor?";
 
-    memPush(wa_id, "user", userText);
-    memPush(wa_id, "assistant", output);
-
     return output;
 
   } catch (error) {
