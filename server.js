@@ -460,24 +460,25 @@ function isAdQuestion(text = "") {
 const MEMORY_MAX_MESSAGES_LEGACY = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
 const memory_LEGACY = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
 
-function memPushLegacy(wa_id, role, content) {
+function memPush(wa_id, role, content) {
   if (!wa_id) return;
   const text = String(content || "").trim();
   if (!text) return;
 
-  const arr = memory_LEGACY.get(wa_id) || [];
+  const arr = memory.get(wa_id) || [];
+  // Mapear roles para consistencia interna (user/assistant)
   arr.push({ role, content: text.slice(0, 1500), ts: new Date().toISOString() });
 
-  while (arr.length > MEMORY_MAX_MESSAGES_LEGACY) arr.shift();
-  memory_LEGACY.set(wa_id, arr);
+  while (arr.length > MEMORY_MAX_MESSAGES) arr.shift();
+  memory.set(wa_id, arr);
 }
 
-function memGetLegacy(wa_id) {
-  return memory_LEGACY.get(wa_id) || [];
+function memGet(wa_id) {
+  return memory.get(wa_id) || [];
 }
 
-function memClearLegacy(wa_id) {
-  memory_LEGACY.delete(wa_id);
+function memClear(wa_id) {
+  memory.delete(wa_id);
 }
 
 /**
@@ -488,18 +489,8 @@ async function sendTextM(to, bodyText, ref_id = "") {
   // llama tu función real
   const r = await sendText(to, bodyText, ref_id);
   // guarda memoria solo si envió OK (opcional)
-  memPushLegacy(to, "assistant", bodyText);
+  memPush(to, "assistant", bodyText);
   return r;
-}
-
-/**
- * Wrapper: OpenAI con memoria
- * MISMA idea que askOpenAI(userText, state) pero recibe wa_id para saber qu® memoria usar.
- * Ajusta si tu askOpenAI original ya recibe (userText, state)
- */
-async function askOpenAIM(wa_id, userText, state = "BOT") {
-  // Delegar a askOpenAI para mantener una sola lógica de IA + memoria
-  return await askOpenAI(wa_id, userText, state);
 }
 
 /**
@@ -508,7 +499,7 @@ async function askOpenAIM(wa_id, userText, state = "BOT") {
  */
 async function onIncomingText(wa_id, text) {
   // Memoria IN
-  memPushLegacy(wa_id, "user", text);
+  memPush(wa_id, "user", text);
 
   // Si quieres tambi®n guardar en Sheets aquí, descomenta:
   // await saveConversation({ wa_id, direction: "IN", message: text });
@@ -890,6 +881,7 @@ async function updateCell(rangeA1, value) {
 async function sendText(to, bodyText, ref_id = "") {
   if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
     console.warn("⚠️ Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID");
+    console.error("❌ Error CRÍTICO: Falta WHATSAPP_TOKEN o PHONE_NUMBER_ID. Revisa tus variables de entorno.");
     return { ok: false };
   }
 
@@ -910,6 +902,12 @@ async function sendText(to, bodyText, ref_id = "") {
   const raw = await resp.text();
   console.log(" WhatsApp send status:", resp.status);
   console.log(" WhatsApp send raw:", raw);
+  
+  if (!resp.ok) {
+    console.error(`❌ Error enviando mensaje a WhatsApp (${resp.status}):`, raw);
+  } else {
+    console.log("✅ Mensaje enviado correctamente a WhatsApp.");
+  }
 
   // OUT conversations
   await saveConversation({ wa_id: to, direction: "OUT", message: bodyText, ref_id });
@@ -1079,9 +1077,8 @@ function normalize(parsed) {
 }
 
 // =============================
-// MEMORIA TEMPORAL (últimos 20 mensajes por cliente)
+// GEMINI TEXT (estable)
 // =============================
-const shortMemory = new Map(); // wa_id -> [{role, content}]
 
 function memPush(wa_id, role, content) {
   if (!wa_id) return;
@@ -1143,11 +1140,12 @@ async function askOpenAI(wa_id, userText, state = "BOT") {
 
   output = output || "Me repites, por favor?";
 
-  //  Guardar memoria (usuario y asistente)
-  memPush(wa_id, "user", userText);
-  memPush(wa_id, "assistant", output);
+    return output;
 
-  return output;
+  } catch (error) {
+    console.error("❌ Error crítico en Gemini:", error);
+    return "hola, bienvenido a rifas el agropecuario, en este momento nos encontramos realizando mantenimiento a nuestro servidor, escribenos al numero 3003960782";
+  }
 }
 
 /* ================= MONITOR APROBADOS ================= */
@@ -1295,6 +1293,8 @@ app.post("/webhook", async (req, res) => {
     return cleanText;
   }
 
+  // ✅ CORRECCIÓN: Declarar wa_id fuera del try para que el catch lo vea y evitar ReferenceError
+  let wa_id = "";
 
   // Helper: si por error la IA devuelve JSON, lo convertimos a texto humano
   function humanizeIfJson(text) {
@@ -1321,7 +1321,7 @@ app.post("/webhook", async (req, res) => {
     const msg = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!msg) return;
 
-    const wa_id = msg.from;
+    wa_id = msg.from; 
     const type = msg.type;
 
     // Si el cliente responde, cancelar recordatorio pendiente
@@ -1365,7 +1365,7 @@ if (type === "audio") {
 
     const state = await getLatestStateByWaId(wa_id);
     const stage = await getConversationStage(wa_id);
-    const aiReplyRaw = await askOpenAI(wa_id, text, state);
+    const aiReplyRaw = await askGemini(wa_id, text, state); // Usar askGemini directamente
     const aiReply = humanizeIfJson(aiReplyRaw);
 
     const reply = await withGreeting(wa_id, aiReply);
@@ -1407,6 +1407,7 @@ if (type === "text") {
 
   // 🔹 LOG IN (texto recibido)
   await safeConversationLog("IN", wa_id, text);
+  console.log(`📩 Mensaje de ${wa_id}: ${text}`);
 
   // Guardar conversación (solo una vez por mensaje)
   await saveConversation({ wa_id, direction: "IN", message: text });
@@ -1691,7 +1692,7 @@ if (type === "text") {
   // 5) TODO LO DEMÁS: IA (tu prompt manda)
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
-  const aiReplyRaw = await askOpenAI(wa_id, text, state);
+  const aiReplyRaw = await askGemini(wa_id, text, state); // Usar askGemini directamente
   const aiReply = humanizeIfJson(aiReplyRaw);
 
   const replyAI = await withGreeting(wa_id, aiReply);
