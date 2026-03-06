@@ -1092,11 +1092,7 @@ async function askGemini(wa_id, userText, state = "BOT") {
 
     return output;
 
-  } catch (error) {
-    console.error("❌ Error crítico en Gemini:", error);
-    return "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
-  }
-}
+  
 
 /* ================= MONITOR APROBADOS ================= */
 
