@@ -43,39 +43,66 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_SECRET_TOKEN = process.env.TELEGRAM_SECRET_TOKEN || ""; // OBLIGATORIO
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
-// =============================
-// GEMINI CONFIG
-// =============================
-
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-// API KEY
+// Gemini
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-
-// MODELOS
-const GEMINI_MODEL_TEXT =
-  process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash-latest";
-
-const GEMINI_MODEL_VISION =
-  process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash-latest";
-
-// LOG PARA VERIFICAR QUE LA KEY CARGUE
-console.log("Gemini key loaded:", !!GEMINI_API_KEY);
-
-// INICIALIZAR GEMINI
-const gemini = GEMINI_API_KEY
-  ? new GoogleGenerativeAI(GEMINI_API_KEY)
-  : null;
-
-if (!gemini) {
-  console.warn("⚠️ GEMINI_API_KEY no configurada. Gemini deshabilitado.");
-}
+const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash";
+const GEMINI_MODEL_VISION = process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash";
 
 // Control follow-up de ventas (1 solo recordatorio)
 const followUps = new Map();
 
 // Último precio calculado por usuario (para no repetir preguntas)
 const lastPriceQuote = new Map(); // wa_id -> { qty, total, packs5, packs2, packs1 }
+
+
+async function geminiGenerateContent({ model, systemInstruction = "", contents = [] }) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY no configurada");
+  }
+
+  const selectedModel = String(model || "").trim() || "gemini-1.5-flash";
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${GEMINI_API_KEY}`;
+
+  const payload = {
+    contents,
+  };
+
+  if (systemInstruction) {
+    payload.systemInstruction = {
+      parts: [{ text: systemInstruction }],
+    };
+  }
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json().catch(() => ({}));
+
+  if (!resp.ok) {
+    throw new Error(`Gemini API error: ${resp.status} ${JSON.stringify(data)}`);
+  }
+
+  if (data?.promptFeedback?.blockReason) {
+    throw new Error(`Gemini bloqueó el prompt: ${data.promptFeedback.blockReason}`);
+  }
+
+  const firstCandidate = data?.candidates?.[0] || {};
+  const finishReason = firstCandidate?.finishReason || "";
+  const joinedText =
+    firstCandidate?.content?.parts
+      ?.map((p) => p.text || "")
+      .join("\n")
+      .trim() || "";
+
+  if (!joinedText) {
+    throw new Error(`Gemini sin texto (finishReason=${finishReason || "N/A"})`);
+  }
+
+  return joinedText;
+}
 
 /* ================= PROMPT PRO (DEL HÍBRIDO) ================= */
 
@@ -430,8 +457,8 @@ function isAdQuestion(text = "") {
    - Solo envuelve sendText y askOpenAI.
    ============================================================ */
 
-const MEMORY_MAX_MESSAGES = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
-const memory = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
+const MEMORY_MAX_MESSAGES_LEGACY = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
+const memory_LEGACY = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
 
 function memPush(wa_id, role, content) {
   if (!wa_id) return;
@@ -972,7 +999,7 @@ async function downloadWhatsAppMediaAsBuffer(mediaUrl) {
 }
 
 async function classifyPaymentImage({ mediaId }) {
-  if (!gemini)
+  if (!GEMINI_API_KEY)
     return { label: "DUDA", confidence: 0, why: "GEMINI_API_KEY no configurada" };
 
   const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
@@ -985,18 +1012,20 @@ Reglas:
 - PUBLICIDAD: afiche / promoción, banner con premios, precios, números, logo invitando a comprar.
 Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
-  const model = gemini.getGenerativeModel({ model: GEMINI_MODEL_VISION });
-  const resp = await model.generateContent([
-    prompt,
-    {
-      inlineData: {
-        data: b64Image,
-        mimeType,
-      },
-    },
-  ]);
-
-  const out = (resp?.response?.text() || "").trim();
+  const out = (
+    await geminiGenerateContent({
+      model: GEMINI_MODEL_VISION,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inlineData: { data: b64Image, mimeType } },
+          ],
+        },
+      ],
+    })
+  ).trim();
 
   try {
     const parsed = JSON.parse(out);
@@ -1051,14 +1080,36 @@ function normalize(parsed) {
 // GEMINI TEXT (estable)
 // =============================
 
-async function askGemini(wa_id, userText, state = "BOT") {
+function memPush(wa_id, role, content) {
+  if (!wa_id) return;
 
-  if (!gemini) {
+  const arr = shortMemory.get(wa_id) || [];
+  arr.push({
+    role,
+    content: String(content || "").slice(0, 1500),
+  });
+
+  // Mantener solo últimos 20 mensajes
+  while (arr.length > 20) arr.shift();
+
+  shortMemory.set(wa_id, arr);
+}
+
+function memGet(wa_id) {
+  return shortMemory.get(wa_id) || [];
+}
+
+
+// =============================
+// GEMINI TEXT (con memoria)
+// =============================
+async function askOpenAI(wa_id, userText, state = "BOT") {
+
+  if (!GEMINI_API_KEY) {
     return "Te gustaría participar o conocer precios de boletas?";
   }
 
   const history = memGet(wa_id);
-
   const contents = history
     .map((msg) => {
       const role = msg.role === "assistant" ? "model" : "user";
@@ -1073,19 +1124,21 @@ async function askGemini(wa_id, userText, state = "BOT") {
     parts: [{ text: userText }],
   });
 
+  let output = "";
   try {
-    // ✅ CORRECCIÓN: systemInstruction se configura al obtener el modelo
-    const model = gemini.getGenerativeModel({ 
-      model: GEMINI_MODEL_TEXT,
-      systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`
-    });
+    output = (
+      await geminiGenerateContent({
+        model: GEMINI_MODEL_TEXT,
+        systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
+        contents,
+      })
+    ).trim();
+  } catch (e) {
+    console.error("❌ Error Gemini texto:", e?.message || e);
+    output = "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
+  }
 
-    const resp = await model.generateContent({ contents });
-
-    const response = await resp.response;
-    const output = (response?.text() || "").trim() || "Me repites, por favor?";
-
-    console.log(`🤖 Gemini (${wa_id}):`, output);
+  output = output || "Me repites, por favor?";
 
     memPush(wa_id, "user", userText);
     memPush(wa_id, "assistant", output);
