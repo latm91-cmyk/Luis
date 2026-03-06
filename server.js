@@ -5,7 +5,6 @@ const { google } = require("googleapis");
 const fetch = require("node-fetch"); // v2
 const crypto = require("crypto");
 const FormData = require("form-data");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
 
 const app = express();
