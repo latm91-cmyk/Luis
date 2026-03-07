@@ -327,12 +327,12 @@ function createConversationService(deps) {
         }
       }
 
-      // =============================
-// PEDIR OTROS NUMEROS
+// =============================
+// PEDIR NUMEROS DISPONIBLES
 // =============================
 
-const pideOtrosNumeros =
-  t === "otros" ||
+const pideNumeros =
+t === "otros" ||
   t === "mas" ||
   t === "más" ||
   t.includes("otros numeros") ||
@@ -345,43 +345,7 @@ const pideOtrosNumeros =
   t.includes("no me gustaron") ||
   t.includes("otra seleccion") ||
   t.includes("otra selección") ||
-  t.includes("ver otros");
-
-if (pideOtrosNumeros) {
-
-  const opciones = await getOpcionesBoletas({
-    sheetsRepository,
-    wa_id,
-    count: 5
-  });
-
-  if (!opciones.length) {
-    await sendTextM(
-      wa_id,
-      "⚠️ Ya no quedan más boletas disponibles."
-    );
-    return;
-  }
-
-  let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
-
-  opciones.forEach((b, i) => {
-    mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-  });
-
-  mensaje += "\nResponde con el número de la opción que quieres.";
-
-  await sendTextM(wa_id, mensaje);
-
-  return;
-}
-
-
-// =============================
-// PEDIR NUMEROS DISPONIBLES
-// =============================
-
-const pideNumeros =
+  t.includes("ver otros") ||
   t.includes("numeros") ||
   t.includes("números") ||
   t.includes("boletas disponibles") ||
