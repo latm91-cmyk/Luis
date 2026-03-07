@@ -1158,25 +1158,33 @@ async function askGemini(wa_id, userText, state = "BOT") {
 /* ================= MONITOR APROBADOS ================= */
 
 async function monitorAprobados() {
-  try {
-    if (!sheets) return;
-    const rows = await getAllRowsAtoH();
+  if (!sheets) return;
 
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      const wa_id = row?.[2];
-      const state = row?.[3];
-      const notes = row?.[7];
+  const rows = await getAllRowsAtoH().catch((err) => {
+    console.error("❌ monitorAprobados (getAllRowsAtoH):", err);
+    return [];
+  });
 
-      if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
-        await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta.");
-        // Normaliza estado en la columna D y marca como notificado para evitar re-envíos cada 30s
-        await updateCell(`D${i + 1}`, "APROBADO");
-        await updateCell(`H${i + 1}`, "NOTIFIED_APROBADO");
-      }
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const wa_id = row?.[2];
+    const state = row?.[3];
+    const notes = row?.[7];
+
+    if (state === "APROBADO" && notes !== "NOTIFIED_APROBADO") {
+      await sendText(wa_id, "✅ Tu pago fue aprobado. En breve te enviamos tu boleta.").catch((err) => {
+        console.error("❌ monitorAprobados (sendText):", err);
+      });
+
+      // Normaliza estado en la columna D y marca como notificado para evitar re-envíos cada 30s
+      await updateCell(`D${i + 1}`, "APROBADO").catch((err) => {
+        console.error("❌ monitorAprobados (update D):", err);
+      });
+
+      await updateCell(`H${i + 1}`, "NOTIFIED_APROBADO").catch((err) => {
+        console.error("❌ monitorAprobados (update H):", err);
+      });
     }
-  } catch (err) {
-    console.error("❌ monitorAprobados:", err);
   }
 }
 
