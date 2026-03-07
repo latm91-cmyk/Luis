@@ -58,4 +58,9 @@ function start() {
   });
 }
 
+// Detección: Si este archivo es el que se está ejecutando directamente (node src/server.js)
+if (require.main === module) {
+  start();
+}
+
 module.exports = { app, start };

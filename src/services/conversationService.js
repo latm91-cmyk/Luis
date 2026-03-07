@@ -1,3 +1,21 @@
+const {
+  reservarBoletaSegura,
+  reservarMultiplesBoletas,
+  contarBoletasDisponibles
+} = require('../services/boletasService');
+
+const {
+  getOpcionesBoletas,
+  seleccionarBoleta,
+  resetOpciones
+} = require('../services/numerosService');
+
+const {
+  reservarMultiplesBoletas
+} = require('../services/boletasService');
+const {
+  reservarBoletaSegura
+} = require('../services/boletasService');
 const { SYSTEM_PROMPT } = require('../clients/prompt');
 const { GEMINI_API_KEY, GEMINI_MODEL_TEXT, TELEGRAM_CHAT_ID } = require('../config');
 
@@ -182,92 +200,340 @@ function createConversationService(deps) {
     }
 
     if (type === 'text') {
-      const text = (msg.text?.body || '').trim();
-      const t = text.toLowerCase();
-      const tNorm = String(text).toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-      await telegramClient.safeConversationLog('IN', wa_id, text);
-      await sheetsRepository.saveConversation({ wa_id, direction: 'IN', message: text });
+  const text = (msg.text?.body || '').trim();
+  const t = text.toLowerCase();
 
-      const state = await sheetsRepository.getLatestStateByWaId(wa_id);
-      const stage = await sheetsRepository.getConversationStage(wa_id);
-      const lastLabel = memoryStore.getLastImageLabel(wa_id);
+  const tNorm = String(text)
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
-      if (lastLabel === 'PUBLICIDAD' && (t.includes('http') || t.includes('facebook.com') || t.includes('instagram.com') || t.includes('tiktok.com'))) {
-        const reply = await withGreeting(wa_id, 'Gracias por el enlace.\n\nPara confirmarte si es de nosotros o de un influencer, *no basta con el link*.\n\n✅ Envíame una *captura* donde se vea el *nombre de la página/perfil* que publicó el anuncio (arriba del post) o dime el nombre del influencer.');
-        await telegramClient.safeConversationLog('OUT', wa_id, reply);
-        await sendTextM(wa_id, reply);
-        memoryStore.setLastImageLabel(wa_id, null);
-        return;
-      }
+  const state = await sheetsRepository.getLatestStateByWaId(wa_id);
+  const stage = await sheetsRepository.getConversationStage(wa_id);
 
-      const buyIntent =
-        tNorm.includes('quiero') || tNorm.includes('deseo') || tNorm.includes('me llevo') || tNorm.includes('apuntame') ||
-        tNorm.includes('separam') || tNorm.includes('listo') || tNorm.includes('haga') || tNorm.includes('hagale') ||
-        tNorm.includes('de una') || tNorm.includes('particip') || tNorm.includes('comprar') || tNorm.includes('pagar') ||
-        tNorm.includes('nequi') || tNorm.includes('daviplata') || tNorm.includes('davi');
+  await telegramClient.safeConversationLog('IN', wa_id, text);
+  await sheetsRepository.saveConversation({
+    wa_id,
+    direction: 'IN',
+    message: text
+  });
 
-      const mentionsMethod = t.includes('nequi') || t.includes('daviplata') || t.includes('davi');
-      let qtyCandidate = tryExtractBoletasQty(text);
+  // =============================
+  // PEDIR OTROS NUMEROS
+  // =============================
 
-      if (!qtyCandidate) {
-        const wordMap = { una: 1, uno: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12 };
-        if (tNorm.includes('un par')) qtyCandidate = 2;
-        if (!qtyCandidate) {
-          const mWord = tNorm.match(/\b(una|uno|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b(?:\s*(boletas?|boletos?))?/i);
-          if (mWord) qtyCandidate = wordMap[mWord[1].toLowerCase()] || null;
-        }
-      }
+  const pideOtrosNumeros =
+  t === "otros" ||
+  t === "mas" ||
+  t === "más" ||
+  t.includes("otros numeros") ||
+  t.includes("otros números") ||
+  t.includes("más numeros") ||
+  t.includes("mas números") ||
+  t.includes("otros por favor")
+  t.includes("mas opciones")
+  t.includes("más opciones")
+  t.includes("no me gustaron")
+  t.includes("otra seleccion")
+  t.includes("otra selección")
+  t.includes("ver otros");
 
-      if (!qtyCandidate) {
-        const m = tNorm.match(/^\s*(\d{1,4})\b/);
-        if (m) qtyCandidate = parseInt(m[1], 10);
-      }
+  if (pideOtrosNumeros) {
 
-      if ((buyIntent || mentionsMethod) && !qtyCandidate && stage !== 'PRICE_GIVEN') {
-        if (stage !== 'AWAITING_QTY') await sheetsRepository.setConversationStage(wa_id, 'AWAITING_QTY');
-        const reply = await withGreeting(wa_id, '✅ Perfecto. Para apartarte el número necesito la cantidad.\n\n¿Cuántas boletas quieres? (Ej: 1, 2, 5 o 10)');
-        await telegramClient.safeConversationLog('OUT', wa_id, reply);
-        await sendTextM(wa_id, reply);
-        return;
-      }
+    const opciones = await getOpcionesBoletas({
+      sheetsRepository,
+      wa_id,
+      count: 5
+    });
 
-      if (qtyCandidate && (stage === 'AWAITING_QTY' || t.includes('boleta') || t.includes('boletas') || buyIntent)) {
-        const breakdown = calcTotalCOPForBoletas(qtyCandidate);
-        if (!breakdown) {
-          const replyErr = await withGreeting(wa_id, 'No entendí la cantidad. Envíame solo el número de boletas (ej: 1, 2, 5, 7, 10).');
-          await telegramClient.safeConversationLog('OUT', wa_id, replyErr);
-          await sendTextM(wa_id, replyErr);
-          return;
-        }
+    if (!opciones.length) {
 
-        await sheetsRepository.setConversationStage(wa_id, 'PRICE_GIVEN');
-        memoryStore.lastPriceQuote.set(wa_id, breakdown);
-        const reply = await withGreeting(wa_id, pricingReplyMessage(qtyCandidate, breakdown));
-        await telegramClient.safeConversationLog('OUT', wa_id, reply);
-        await sendTextM(wa_id, reply);
-        return;
-      }
+      await sendTextM(
+        wa_id,
+        "⚠️ Ya no quedan más boletas disponibles."
+      );
 
-      if (stage === 'PRICE_GIVEN' && (t.includes('nequi') || t.includes('daviplata') || t.includes('davi'))) {
-        const quote = memoryStore.lastPriceQuote.get(wa_id);
-        const resumen = quote?.total ? `✅ Para ${quote.qty} boleta(s), el total es $${formatCOP(quote.total)} COP.\n\n` : '';
-        const isNequi = t.includes('nequi');
-        const reply = await withGreeting(
-          wa_id,
-          `${resumen}📲 Paga por *${isNequi ? 'Nequi' : 'Daviplata'}* al número *3223146142*.\nLuego envíame el comprobante + tu nombre completo + municipio + celular.`,
-        );
-        await telegramClient.safeConversationLog('OUT', wa_id, reply);
-        await sendTextM(wa_id, reply);
-        return;
-      }
-
-      const aiReplyRaw = await askGemini(wa_id, text, state);
-      const replyAI = await withGreeting(wa_id, humanizeIfJson(aiReplyRaw));
-      await telegramClient.safeConversationLog('OUT', wa_id, replyAI);
-      await whatsappClient.sendText(wa_id, replyAI);
       return;
     }
+
+    let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
+
+    opciones.forEach((b, i) => {
+      mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+    });
+
+    mensaje += "\nResponde con el número de la opción que quieres.";
+
+    await sendTextM(wa_id, mensaje);
+
+    return;
+  }
+
+// =============================
+// COMPRA DIRECTA DE BOLETAS
+// =============================
+
+let qtyDirecta = tryExtractBoletasQty(text);
+
+const quiereComprarDirecto =
+  t.includes("dame") ||
+  t.includes("quiero") ||
+  t.includes("apart") ||
+  t.includes("llevo") ||
+  t.includes("apuntame");
+
+if (qtyDirecta && quiereComprarDirecto && qtyDirecta <= 20) {
+
+  try {
+
+    const boletas = await reservarMultiplesBoletas(
+      sheetsRepository,
+      qtyDirecta,
+      wa_id
+    );
+
+    if (!boletas.length) {
+
+      await sendTextM(
+        wa_id,
+        "⚠️ En este momento no hay suficientes boletas disponibles."
+      );
+
+      return;
+    }
+
+    let mensaje = "🎟️ Te aparté estas boletas:\n\n";
+
+    boletas.forEach((b, i) => {
+      mensaje += `${i + 1}️⃣ ${b}\n`;
+    });
+
+    mensaje +=
+      `\nAhora puedes pagar:\n\n` +
+      `Nequi / Daviplata\n` +
+      `📲 3223146142\n\n` +
+      `Envía el comprobante + nombre + municipio.`;
+
+    await sendTextM(wa_id, mensaje);
+
+    return;
+
+  } catch (err) {
+
+    console.error("Error reservando múltiples boletas", err);
+
+    await sendTextM(
+      wa_id,
+      "⚠️ Ocurrió un error reservando las boletas."
+    );
+
+    return;
+  }
+}
+
+  // =============================
+  // PEDIR NUMEROS DISPONIBLES
+  // =============================
+
+  const pideNumeros =
+    t.includes("numeros") ||
+    t.includes("números") ||
+    t.includes("boletas disponibles") ||
+    t.includes("ver numeros") ||
+    t.includes("ver boletas") ||
+    t.includes("que numeros") ||
+    t.includes("qué números") ||
+    t.includes("tienes numeros") ||
+    t.includes("tienes números") ||
+    t.includes("puedo escoger");
+
+  if (pideNumeros) {
+
+    const opciones = await getOpcionesBoletas({
+      sheetsRepository,
+      wa_id,
+      count: 5
+    });
+
+    if (!opciones.length) {
+
+      await sendTextM(
+        wa_id,
+        "⚠️ En este momento no hay boletas disponibles."
+      );
+
+      return;
+    }
+
+const conteo = await contarBoletasDisponibles(sheetsRepository);
+
+    let mensaje =
+  `🎟️ Boletas disponibles: *${conteo.disponibles} / ${conteo.total}*\n\n`;
+
+mensaje += "Estas boletas están disponibles:\n\n";
+
+opciones.forEach((b, i) => {
+  mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+});
+
+mensaje += "\nResponde con el número de la opción que quieres.";
+
+    await sendTextM(wa_id, mensaje);
+
+    return;
+  }
+
+  // =============================
+  // SELECCIONAR BOLETA
+  // =============================
+
+  const opcion = text.match(/^[1-5]$/);
+
+  if (opcion) {
+
+    const index = parseInt(opcion[0]);
+
+    const opciones = await getOpcionesBoletas({
+      sheetsRepository,
+      wa_id,
+      count: 5
+    });
+
+    const seleccion = seleccionarBoleta(opciones, index);
+
+    if (!seleccion) {
+
+      await sendTextM(
+        wa_id,
+        "❌ Esa opción no es válida. Elige un número del 1 al 5."
+      );
+
+      return;
+    }
+
+    const ok = await reservarBoletaSegura(
+      sheetsRepository.sheets,
+      sheetsRepository.sheetId,
+      "boletas_index",
+   // =============================
+// PEDIR NUMEROS DISPONIBLES
+// =============================
+
+const pideNumeros =
+  t.includes("numeros") ||
+  t.includes("números") ||
+  t.includes("boletas disponibles") ||
+  t.includes("ver numeros") ||
+  t.includes("ver boletas") ||
+  t.includes("que numeros") ||
+  t.includes("qué números") ||
+  t.includes("tienes numeros") ||
+  t.includes("tienes números") ||
+  t.includes("puedo escoger");
+
+if (pideNumeros) {
+
+  const opciones = await getOpcionesBoletas({
+    sheetsRepository,
+    wa_id,
+    count: 5
+  });
+
+  if (!opciones.length) {
+
+    await sendTextM(
+      wa_id,
+      "⚠️ En este momento no hay boletas disponibles."
+    );
+
+    return;
+  }
+
+  // contador de boletas
+  const conteo = await contarBoletasDisponibles(sheetsRepository);
+
+  let mensaje =
+    `🎟️ *Boletas disponibles:* ${conteo.disponibles} / ${conteo.total}\n\n`;
+
+  mensaje += "Estas boletas están disponibles:\n\n";
+
+  opciones.forEach((b, i) => {
+    mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+  });
+
+  mensaje += "\nResponde con el número de la opción que quieres.";
+
+  await sendTextM(wa_id, mensaje);
+
+  return;
+}
+
+seleccion.boleta,
+      wa_id
+    );
+
+    if (!ok) {
+
+  await sendTextM(
+    wa_id,
+    "⚠️ Esa boleta ya fue reservada por otro cliente. Te muestro otras."
+  );
+
+  resetOpciones(wa_id);
+
+  const nuevas = await getOpcionesBoletas({
+    sheetsRepository,
+    wa_id,
+    count: 5
+  });
+
+  let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
+
+  nuevas.forEach((b, i) => {
+    mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+  });
+
+  mensaje += "\nResponde con el número de la opción que quieres.";
+
+  await sendTextM(wa_id, mensaje);
+
+  return;
+}
+
+    resetOpciones(wa_id);
+
+    const reply =
+      `✅ Boleta reservada: *${seleccion.boleta}*\n\n` +
+      `Ahora puedes pagar:\n\n` +
+      `Nequi / Daviplata\n` +
+      `📲 3223146142\n\n` +
+      `Envía el comprobante + nombre + municipio.`;
+
+    await sendTextM(wa_id, reply);
+
+    return;
+  }
+
+  // =============================
+  // RESPUESTA IA
+  // =============================
+
+  const aiReplyRaw = await askGemini(wa_id, text, state);
+
+  const replyAI = await withGreeting(
+    wa_id,
+    humanizeIfJson(aiReplyRaw)
+  );
+
+  await telegramClient.safeConversationLog('OUT', wa_id, replyAI);
+
+  await whatsappClient.sendText(wa_id, replyAI);
+
+  return;
+}
+
 
     if (type === 'image') {
       const mediaId = msg.image?.id;

@@ -340,6 +340,23 @@ async function reservarBoletaSegura(
 
 }
 
+async function contarBoletasDisponibles(sheetsRepository) {
+
+  const rows = await sheetsRepository.getBoletas();
+
+  const total = rows.length;
+
+  const disponibles = rows.filter(
+    r => r.estado === "DISPONIBLE"
+  ).length;
+
+  return {
+    disponibles,
+    total
+  };
+
+}
+
 module.exports = {
   reservarBoletas,
   liberarReservasExpiradas,
