@@ -372,6 +372,23 @@ function createSheetsRepository({ sheets }) {
 
   }
 
+  async function marcarPagoProcesado(ref) {
+
+  const row = await findRowByRef(ref);
+
+  if (!row) return;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${CASES_TAB}!D${row.rowNumber}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [["PROCESADO"]]
+    }
+  });
+
+}
+
   return {
     sheets,
     getBoletas,
@@ -386,7 +403,8 @@ function createSheetsRepository({ sheets }) {
     getPagosPendientes,
     createReference,
     findRowByRef,
-    updateCell
+    updateCell,
+    marcarPagoProcesado
   };
 
 }

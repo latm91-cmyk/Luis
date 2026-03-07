@@ -49,16 +49,23 @@ const conversationService = createConversationService({
 registerWhatsAppRoutes(app, { conversationService });
 registerTelegramRoutes(app, { sheetsRepository, whatsappClient, telegramClient });
 
-const monitorAprobados = createMonitorAprobadosWorker({ sheetsRepository, sendText: whatsappClient.sendText });
+const monitorAprobados = createMonitorAprobadosWorker({
+  sheetsRepository,
+  boletasService,
+  sendText: whatsappClient.sendText,
+  sendImage: whatsappClient.sendImage
+});
+
+setInterval(monitorAprobados, 30000);
+
+startBoletasWorker({
+  sheetsRepository,
+  whatsappClient,
+  boletasService
+});
 
 function start() {
 
-  setInterval(monitorAprobados, 30000);
-
-  startBoletasWorker({
-    sheetsRepository,
-    whatsappClient
-  });
 
   const PORT = process.env.PORT || 10000;
 
