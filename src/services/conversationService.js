@@ -81,7 +81,7 @@ function humanizeIfJson(text) {
         if (label === 'OTRO') return '👀 Ese archivo no parece un comprobante.';
         return '👀 No logro confirmar si es comprobante. Me envías una captura más clara?';
       }
-    } catch {}
+    } catch { }
   }
   return t;
 }
@@ -195,338 +195,340 @@ function createConversationService(deps) {
 
     if (type === 'text') {
 
-  const text = (msg.text?.body || '').trim();
-  const t = text.toLowerCase();
+      const text = (msg.text?.body || '').trim();
+      const t = text.toLowerCase();
 
-  const tNorm = String(text)
-    .toLowerCase()
-    .trim()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+      const tNorm = String(text)
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
 
-  const state = await sheetsRepository.getLatestStateByWaId(wa_id);
-  const stage = await sheetsRepository.getConversationStage(wa_id);
+      const state = await sheetsRepository.getLatestStateByWaId(wa_id);
+      const stage = await sheetsRepository.getConversationStage(wa_id);
 
-  await telegramClient.safeConversationLog('IN', wa_id, text);
-  await sheetsRepository.saveConversation({
-    wa_id,
-    direction: 'IN',
-    message: text
-  });
-
-  // =============================
-  // PEDIR OTROS NUMEROS
-  // =============================
-
-  const pideOtrosNumeros =
-  t === "otros" ||
-  t === "mas" ||
-  t === "más" ||
-  t.includes("otros numeros") ||
-  t.includes("otros números") ||
-  t.includes("más numeros") ||
-  t.includes("mas números") ||
-  t.includes("otros por favor")
-  t.includes("mas opciones")
-  t.includes("más opciones")
-  t.includes("no me gustaron")
-  t.includes("otra seleccion")
-  t.includes("otra selección")
-  t.includes("ver otros");
-
-  if (pideOtrosNumeros) {
-
-    const opciones = await getOpcionesBoletas({
-      sheetsRepository,
-      wa_id,
-      count: 5
-    });
-
-    if (!opciones.length) {
-
-      await sendTextM(
+      await telegramClient.safeConversationLog('IN', wa_id, text);
+      await sheetsRepository.saveConversation({
         wa_id,
-        "⚠️ Ya no quedan más boletas disponibles."
+        direction: 'IN',
+        message: text
+      });
+
+      // =============================
+      // PEDIR OTROS NUMEROS
+      // =============================
+
+      const pideOtrosNumeros =
+        t === "otros" ||
+        t === "mas" ||
+        t === "más" ||
+        t.includes("otros numeros") ||
+        t.includes("otros números") ||
+        t.includes("más numeros") ||
+        t.includes("mas números") ||
+        t.includes("otros por favor")
+      t.includes("mas opciones")
+      t.includes("más opciones")
+      t.includes("no me gustaron")
+      t.includes("otra seleccion")
+      t.includes("otra selección")
+      t.includes("ver otros");
+
+      if (pideOtrosNumeros) {
+
+        const opciones = await getOpcionesBoletas({
+          sheetsRepository,
+          wa_id,
+          count: 5
+        });
+
+        if (!opciones.length) {
+
+          await sendTextM(
+            wa_id,
+            "⚠️ Ya no quedan más boletas disponibles."
+          );
+
+          return;
+        }
+
+        let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
+
+        opciones.forEach((b, i) => {
+          mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+        });
+
+        mensaje += "\nResponde con el número de la opción que quieres.";
+
+        await sendTextM(wa_id, mensaje);
+
+        return;
+      }
+
+      // =============================
+      // COMPRA DIRECTA DE BOLETAS
+      // =============================
+
+      let qtyDirecta = tryExtractBoletasQty(text);
+
+      const quiereComprarDirecto =
+        t.includes("dame") ||
+        t.includes("quiero") ||
+        t.includes("apart") ||
+        t.includes("llevo") ||
+        t.includes("apuntame");
+
+      if (qtyDirecta && quiereComprarDirecto && qtyDirecta <= 20) {
+
+        try {
+
+          const boletas = await reservarMultiplesBoletas(
+            sheetsRepository,
+            qtyDirecta,
+            wa_id
+          );
+
+          if (!boletas.length) {
+
+            await sendTextM(
+              wa_id,
+              "⚠️ En este momento no hay suficientes boletas disponibles."
+            );
+
+            return;
+          }
+
+          let mensaje = "🎟️ Te aparté estas boletas:\n\n";
+
+          boletas.forEach((b, i) => {
+            mensaje += `${i + 1}️⃣ ${b}\n`;
+          });
+
+          mensaje +=
+            `\nAhora puedes pagar:\n\n` +
+            `Nequi / Daviplata\n` +
+            `📲 3223146142\n\n` +
+            `Envía el comprobante + nombre + municipio.`;
+
+          await sendTextM(wa_id, mensaje);
+
+          return;
+
+        } catch (err) {
+
+          console.error("Error reservando múltiples boletas", err);
+
+          await sendTextM(
+            wa_id,
+            "⚠️ Ocurrió un error reservando las boletas."
+          );
+
+          return;
+        }
+      }
+
+      // =============================
+      // PEDIR NUMEROS DISPONIBLES
+      // =============================
+
+      const pideNumeros =
+        t.includes("numeros") ||
+        t.includes("números") ||
+        t.includes("boletas disponibles") ||
+        t.includes("ver numeros") ||
+        t.includes("ver boletas") ||
+        t.includes("que numeros") ||
+        t.includes("qué números") ||
+        t.includes("tienes numeros") ||
+        t.includes("tienes números") ||
+        t.includes("puedo escoger");
+
+      if (pideNumeros) {
+
+        const opciones = await getOpcionesBoletas({
+          sheetsRepository,
+          wa_id,
+          count: 5
+        });
+
+        if (!opciones.length) {
+
+          await sendTextM(
+            wa_id,
+            "⚠️ En este momento no hay boletas disponibles."
+          );
+
+          return;
+        }
+
+        const conteo = await contarBoletasDisponibles(sheetsRepository);
+
+        let mensaje =
+          `🎟️ Boletas disponibles: *${conteo.disponibles} / ${conteo.total}*\n\n`;
+
+        mensaje += "Estas boletas están disponibles:\n\n";
+
+        opciones.forEach((b, i) => {
+          mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+        });
+
+        mensaje += "\nResponde con el número de la opción que quieres.";
+
+        await sendTextM(wa_id, mensaje);
+
+        return;
+      }
+
+      // =============================
+      // SELECCIONAR BOLETA
+      // =============================
+
+      const opcion = text.match(/^[1-5]$/);
+
+      if (opcion) {
+
+        const index = parseInt(opcion[0]);
+
+        const opciones = await getOpcionesBoletas({
+          sheetsRepository,
+          wa_id,
+          count: 5
+        });
+
+        const seleccion = seleccionarBoleta(opciones, index);
+
+        if (!seleccion) {
+
+          await sendTextM(
+            wa_id,
+            "❌ Esa opción no es válida. Elige un número del 1 al 5."
+          );
+
+          return;
+        }
+
+        const ok = await reservarBoletaSegura(
+          sheetsRepository.sheets,
+          sheetsRepository.sheetId,
+          "boletas_index",)
+        }
+        
+        // =============================
+        // PEDIR NUMEROS DISPONIBLES
+        // =============================
+
+        const pideNumeros =
+          t.includes("numeros") ||
+          t.includes("números") ||
+          t.includes("boletas disponibles") ||
+          t.includes("ver numeros") ||
+          t.includes("ver boletas") ||
+          t.includes("que numeros") ||
+          t.includes("qué números") ||
+          t.includes("tienes numeros") ||
+          t.includes("tienes números") ||
+          t.includes("puedo escoger");
+
+        if (pideNumeros) {
+
+          const opciones = await getOpcionesBoletas({
+            sheetsRepository,
+            wa_id,
+            count: 5
+          });
+
+          if (!opciones.length) {
+
+            await sendTextM(
+              wa_id,
+              "⚠️ En este momento no hay boletas disponibles."
+            );
+
+            return;
+          }
+
+          // contador de boletas
+          const conteo = await contarBoletasDisponibles(sheetsRepository);
+
+          let mensaje =
+            `🎟️ *Boletas disponibles:* ${conteo.disponibles} / ${conteo.total}\n\n`;
+
+          mensaje += "Estas boletas están disponibles:\n\n";
+
+          opciones.forEach((b, i) => {
+            mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+          });
+
+          mensaje += "\nResponde con el número de la opción que quieres.";
+
+          await sendTextM(wa_id, mensaje);
+
+          return;
+        }
+
+        seleccion.boleta,
+          wa_id
+    );
+
+        if (!ok) {
+
+          await sendTextM(
+            wa_id,
+            "⚠️ Esa boleta ya fue reservada por otro cliente. Te muestro otras."
+          );
+
+          resetOpciones(wa_id);
+
+          const nuevas = await getOpcionesBoletas({
+            sheetsRepository,
+            wa_id,
+            count: 5
+          });
+
+          let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
+
+          nuevas.forEach((b, i) => {
+            mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+          });
+
+          mensaje += "\nResponde con el número de la opción que quieres.";
+
+          await sendTextM(wa_id, mensaje);
+
+          return;
+        }
+
+        resetOpciones(wa_id);
+
+        const reply =
+          `✅ Boleta reservada: *${seleccion.boleta}*\n\n` +
+          `Ahora puedes pagar:\n\n` +
+          `Nequi / Daviplata\n` +
+          `📲 3223146142\n\n` +
+          `Envía el comprobante + nombre + municipio.`;
+
+        await sendTextM(wa_id, reply);
+
+        return;
+      }
+
+      // =============================
+      // RESPUESTA IA
+      // =============================
+
+      const aiReplyRaw = await askGemini(wa_id, text, state);
+
+      const replyAI = await withGreeting(
+        wa_id,
+        humanizeIfJson(aiReplyRaw)
       );
+
+      await telegramClient.safeConversationLog('OUT', wa_id, replyAI);
+
+      await whatsappClient.sendText(wa_id, replyAI);
 
       return;
     }
-
-    let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
-
-    opciones.forEach((b, i) => {
-      mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-    });
-
-    mensaje += "\nResponde con el número de la opción que quieres.";
-
-    await sendTextM(wa_id, mensaje);
-
-    return;
-  }
-
-// =============================
-// COMPRA DIRECTA DE BOLETAS
-// =============================
-
-let qtyDirecta = tryExtractBoletasQty(text);
-
-const quiereComprarDirecto =
-  t.includes("dame") ||
-  t.includes("quiero") ||
-  t.includes("apart") ||
-  t.includes("llevo") ||
-  t.includes("apuntame");
-
-if (qtyDirecta && quiereComprarDirecto && qtyDirecta <= 20) {
-
-  try {
-
-    const boletas = await reservarMultiplesBoletas(
-      sheetsRepository,
-      qtyDirecta,
-      wa_id
-    );
-
-    if (!boletas.length) {
-
-      await sendTextM(
-        wa_id,
-        "⚠️ En este momento no hay suficientes boletas disponibles."
-      );
-
-      return;
-    }
-
-    let mensaje = "🎟️ Te aparté estas boletas:\n\n";
-
-    boletas.forEach((b, i) => {
-      mensaje += `${i + 1}️⃣ ${b}\n`;
-    });
-
-    mensaje +=
-      `\nAhora puedes pagar:\n\n` +
-      `Nequi / Daviplata\n` +
-      `📲 3223146142\n\n` +
-      `Envía el comprobante + nombre + municipio.`;
-
-    await sendTextM(wa_id, mensaje);
-
-    return;
-
-  } catch (err) {
-
-    console.error("Error reservando múltiples boletas", err);
-
-    await sendTextM(
-      wa_id,
-      "⚠️ Ocurrió un error reservando las boletas."
-    );
-
-    return;
-  }
-}
-
-  // =============================
-  // PEDIR NUMEROS DISPONIBLES
-  // =============================
-
-  const pideNumeros =
-    t.includes("numeros") ||
-    t.includes("números") ||
-    t.includes("boletas disponibles") ||
-    t.includes("ver numeros") ||
-    t.includes("ver boletas") ||
-    t.includes("que numeros") ||
-    t.includes("qué números") ||
-    t.includes("tienes numeros") ||
-    t.includes("tienes números") ||
-    t.includes("puedo escoger");
-
-  if (pideNumeros) {
-
-    const opciones = await getOpcionesBoletas({
-      sheetsRepository,
-      wa_id,
-      count: 5
-    });
-
-    if (!opciones.length) {
-
-      await sendTextM(
-        wa_id,
-        "⚠️ En este momento no hay boletas disponibles."
-      );
-
-      return;
-    }
-
-const conteo = await contarBoletasDisponibles(sheetsRepository);
-
-    let mensaje =
-  `🎟️ Boletas disponibles: *${conteo.disponibles} / ${conteo.total}*\n\n`;
-
-mensaje += "Estas boletas están disponibles:\n\n";
-
-opciones.forEach((b, i) => {
-  mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-});
-
-mensaje += "\nResponde con el número de la opción que quieres.";
-
-    await sendTextM(wa_id, mensaje);
-
-    return;
-  }
-
-  // =============================
-  // SELECCIONAR BOLETA
-  // =============================
-
-  const opcion = text.match(/^[1-5]$/);
-
-  if (opcion) {
-
-    const index = parseInt(opcion[0]);
-
-    const opciones = await getOpcionesBoletas({
-      sheetsRepository,
-      wa_id,
-      count: 5
-    });
-
-    const seleccion = seleccionarBoleta(opciones, index);
-
-    if (!seleccion) {
-
-      await sendTextM(
-        wa_id,
-        "❌ Esa opción no es válida. Elige un número del 1 al 5."
-      );
-
-      return;
-    }
-
-    const ok = await reservarBoletaSegura(
-      sheetsRepository.sheets,
-      sheetsRepository.sheetId,
-      "boletas_index",
-   // =============================
-// PEDIR NUMEROS DISPONIBLES
-// =============================
-
-const pideNumeros =
-  t.includes("numeros") ||
-  t.includes("números") ||
-  t.includes("boletas disponibles") ||
-  t.includes("ver numeros") ||
-  t.includes("ver boletas") ||
-  t.includes("que numeros") ||
-  t.includes("qué números") ||
-  t.includes("tienes numeros") ||
-  t.includes("tienes números") ||
-  t.includes("puedo escoger");
-
-if (pideNumeros) {
-
-  const opciones = await getOpcionesBoletas({
-    sheetsRepository,
-    wa_id,
-    count: 5
-  });
-
-  if (!opciones.length) {
-
-    await sendTextM(
-      wa_id,
-      "⚠️ En este momento no hay boletas disponibles."
-    );
-
-    return;
-  }
-
-  // contador de boletas
-  const conteo = await contarBoletasDisponibles(sheetsRepository);
-
-  let mensaje =
-    `🎟️ *Boletas disponibles:* ${conteo.disponibles} / ${conteo.total}\n\n`;
-
-  mensaje += "Estas boletas están disponibles:\n\n";
-
-  opciones.forEach((b, i) => {
-    mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-  });
-
-  mensaje += "\nResponde con el número de la opción que quieres.";
-
-  await sendTextM(wa_id, mensaje);
-
-  return;
-}
-
-seleccion.boleta,
-      wa_id
-    );
-
-    if (!ok) {
-
-  await sendTextM(
-    wa_id,
-    "⚠️ Esa boleta ya fue reservada por otro cliente. Te muestro otras."
-  );
-
-  resetOpciones(wa_id);
-
-  const nuevas = await getOpcionesBoletas({
-    sheetsRepository,
-    wa_id,
-    count: 5
-  });
-
-  let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
-
-  nuevas.forEach((b, i) => {
-    mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-  });
-
-  mensaje += "\nResponde con el número de la opción que quieres.";
-
-  await sendTextM(wa_id, mensaje);
-
-  return;
-}
-
-    resetOpciones(wa_id);
-
-    const reply =
-      `✅ Boleta reservada: *${seleccion.boleta}*\n\n` +
-      `Ahora puedes pagar:\n\n` +
-      `Nequi / Daviplata\n` +
-      `📲 3223146142\n\n` +
-      `Envía el comprobante + nombre + municipio.`;
-
-    await sendTextM(wa_id, reply);
-
-    return;
-  }
-
-  // =============================
-  // RESPUESTA IA
-  // =============================
-
-  const aiReplyRaw = await askGemini(wa_id, text, state);
-
-  const replyAI = await withGreeting(
-    wa_id,
-    humanizeIfJson(aiReplyRaw)
-  );
-
-  await telegramClient.safeConversationLog('OUT', wa_id, replyAI);
-
-  await whatsappClient.sendText(wa_id, replyAI);
-
-  return;
-}
 
 
     if (type === 'image') {
