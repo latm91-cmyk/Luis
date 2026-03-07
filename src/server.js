@@ -12,6 +12,8 @@ const { createConversationService } = require('./services/conversationService');
 const { registerWhatsAppRoutes } = require('./controllers/whatsappController');
 const { registerTelegramRoutes } = require('./controllers/telegramController');
 const { createMonitorAprobadosWorker } = require('./workers/monitorAprobados');
+const { startBoletasWorker } = require('./workers/boletasWorker');
+const boletasService = require('./services/boletasService');
 
 const app = express();
 app.use(
@@ -50,15 +52,22 @@ registerTelegramRoutes(app, { sheetsRepository, whatsappClient, telegramClient }
 const monitorAprobados = createMonitorAprobadosWorker({ sheetsRepository, sendText: whatsappClient.sendText });
 
 function start() {
+
   setInterval(monitorAprobados, 30000);
 
+  startBoletasWorker({
+    sheetsRepository,
+    whatsappClient
+  });
+
   const PORT = process.env.PORT || 10000;
+
   app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
   });
+
 }
 
-// Detección: Si este archivo es el que se está ejecutando directamente (node src/server.js)
 if (require.main === module) {
   start();
 }

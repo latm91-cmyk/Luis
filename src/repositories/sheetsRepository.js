@@ -216,6 +216,55 @@ function createSheetsRepository({ sheets }) {
   };
 }
 
+async function touchSession(wa_id) {
+
+  try {
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: "sessions!A2:C"
+    });
+
+    const rows = res.data.values || [];
+
+    const index = rows.findIndex(r => r[0] === wa_id);
+
+    const now = new Date().toISOString();
+
+    if (index === -1) {
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: sheetId,
+        range: "sessions!A2",
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[wa_id, now]]
+        }
+      });
+
+    } else {
+
+      const rowNumber = index + 2;
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: `sessions!B${rowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[now]]
+        }
+      });
+
+    }
+
+  } catch (err) {
+
+    console.error("touchSession error", err);
+
+  }
+
+}
+
 module.exports = {
   getBoletas,
   touchSession,
