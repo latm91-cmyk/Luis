@@ -10,12 +10,6 @@ const {
   resetOpciones
 } = require('../services/numerosService');
 
-const {
-  reservarMultiplesBoletas
-} = require('../services/boletasService');
-const {
-  reservarBoletaSegura
-} = require('../services/boletasService');
 const { SYSTEM_PROMPT } = require('../clients/prompt');
 const { GEMINI_API_KEY, GEMINI_MODEL_TEXT, TELEGRAM_CHAT_ID } = require('../config');
 
