@@ -1279,6 +1279,23 @@ async function telegramGetFilePath(file_id) {
   return j.result.file_path;
 }
 
+/* ================= AI ACTION PROCESSOR ================= */
+
+function processAiAction(text) {
+  let cleanText = text;
+  let action = null;
+  try {
+    const match = text.match(/(\{[\s\S]*?"action"\s*:\s*"reservar_boletas"[\s\S]*?\})\s*$/);
+    if (match) {
+      action = JSON.parse(match[1]);
+      cleanText = text.replace(match[0], "").trim();
+    }
+  } catch (e) {
+    console.error("Error parsing AI action:", e);
+  }
+  return { cleanText, action };
+}
+
 async function telegramDownloadFileBuffer(file_path) {
   const url = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file_path}`;
   const r = await fetch(url);
