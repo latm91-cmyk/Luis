@@ -10,22 +10,50 @@ function todayYYMMDD() {
 
 function createSheetsRepository({ sheets }) {
 
-  async function getAllSessionsRowsAtoF() {
+  async function getBoletas() {
+
     if (!sheets) return [];
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "boletas_index!A2:E"
+    });
+
+    const rows = res.data.values || [];
+
+    return rows.map(r => ({
+      boleta: r[0],
+      estado: r[1],
+      cliente: r[2],
+      fecha: r[3],
+      referencia: r[4]
+    }));
+
+  }
+
+  async function getAllSessionsRowsAtoF() {
+
+    if (!sheets) return [];
+
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: `${SESSIONS_TAB}!A:F`
     });
+
     return res.data.values || [];
+
   }
 
   async function getSessionByWaId(wa_id) {
+
     const rows = await getAllSessionsRowsAtoF();
 
     for (let i = 1; i < rows.length; i++) {
+
       const row = rows[i];
 
       if (String(row?.[1] || '').trim() === String(wa_id || '').trim()) {
+
         return {
           rowNumber: i + 1,
           created_at: row?.[0] || '',
@@ -35,10 +63,13 @@ function createSheetsRepository({ sheets }) {
           last_seen: row?.[4] || '',
           notes: row?.[5] || '',
         };
+
       }
+
     }
 
     return null;
+
   }
 
   async function upsertSession({ wa_id, greeted = false, notes = '' }) {
@@ -46,6 +77,7 @@ function createSheetsRepository({ sheets }) {
     if (!sheets) return;
 
     const now = new Date().toISOString();
+
     const existing = await getSessionByWaId(wa_id);
 
     if (!existing) {
@@ -63,10 +95,11 @@ function createSheetsRepository({ sheets }) {
             now,
             notes || ''
           ]]
-        },
+        }
       });
 
       return;
+
     }
 
     const rowNum = existing.rowNumber;
@@ -77,7 +110,7 @@ function createSheetsRepository({ sheets }) {
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [[now, notes || existing.notes || '']]
-      },
+      }
     });
 
     if (greeted && !existing.greeted) {
@@ -88,7 +121,7 @@ function createSheetsRepository({ sheets }) {
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [['TRUE', now]]
-        },
+        }
       });
 
     }
@@ -109,14 +142,25 @@ function createSheetsRepository({ sheets }) {
   }
 
   async function setConversationStage(wa_id, stage) {
+
     const s = await getSessionByWaId(wa_id);
+
     const greeted = s?.greeted || false;
-    await upsertSession({ wa_id, greeted, notes: stage });
+
+    await upsertSession({
+      wa_id,
+      greeted,
+      notes: stage
+    });
+
   }
 
   async function getConversationStage(wa_id) {
+
     const s = await getSessionByWaId(wa_id);
+
     return s?.notes || '';
+
   }
 
   async function saveConversation({ wa_id, direction, message, ref_id = '' }) {
@@ -137,7 +181,7 @@ function createSheetsRepository({ sheets }) {
             message,
             ref_id
           ]]
-        },
+        }
       });
 
     } catch (e) {
@@ -172,12 +216,41 @@ function createSheetsRepository({ sheets }) {
       const row = rows[i];
 
       if (row?.[2] === wa_id && row?.[3]) {
+
         lastState = row[3];
+
       }
 
     }
 
     return lastState;
+
+  }
+
+  async function getPagosPendientes() {
+
+    const rows = await getAllRowsAtoH();
+
+    const pendientes = [];
+
+    for (let i = 1; i < rows.length; i++) {
+
+      const row = rows[i];
+
+      if (row?.[3] === "EN_REVISION") {
+
+        pendientes.push({
+          rowNumber: i + 1,
+          ref: row?.[1],
+          wa_id: row?.[2],
+          estado: row?.[3]
+        });
+
+      }
+
+    }
+
+    return pendientes;
 
   }
 
@@ -198,7 +271,9 @@ function createSheetsRepository({ sheets }) {
         const n = parseInt(id.replace(prefix, ''), 10);
 
         if (!Number.isNaN(n)) {
+
           max = Math.max(max, n);
+
         }
 
       }
@@ -249,14 +324,14 @@ function createSheetsRepository({ sheets }) {
           receipt_is_payment || 'UNKNOWN',
           ''
         ]]
-      },
+      }
     });
 
     return { ref, state };
 
   }
 
-  async function findRowByRef(refOrCase) {
+  async function findRowByRef(ref) {
 
     const rows = await getAllRowsAtoH();
 
@@ -264,7 +339,7 @@ function createSheetsRepository({ sheets }) {
 
       const row = rows[i];
 
-      if ((row?.[1] || '') === refOrCase) {
+      if ((row?.[1] || '') === ref) {
 
         return {
           rowNumber: i + 1,
@@ -292,13 +367,14 @@ function createSheetsRepository({ sheets }) {
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [[value]]
-      },
+      }
     });
 
   }
 
   return {
     sheets,
+    getBoletas,
     hasGreeted,
     markGreeted,
     touchSession,
@@ -307,6 +383,7 @@ function createSheetsRepository({ sheets }) {
     saveConversation,
     getAllRowsAtoH,
     getLatestStateByWaId,
+    getPagosPendientes,
     createReference,
     findRowByRef,
     updateCell
