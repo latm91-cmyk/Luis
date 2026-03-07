@@ -7,7 +7,7 @@ const fetch = require("node-fetch"); // v2
 const crypto = require("crypto");
 const FormData = require("form-data");
 const axios = require("axios");
-const reservas = require("./modules/reservas"); // ✅ IMPORTAR MÓDULO
+const reservas = require("./modules/reservas"); // const reservas = require("./modules/reservas");
 
 const app = express();
 
