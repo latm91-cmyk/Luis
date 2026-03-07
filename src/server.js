@@ -1,5 +1,5 @@
 // ===== server.js (AVANZADO + HÍBRIDO, SIN BORRAR FUNCIONES) =====
-
+require("dotenv").config();
 const express = require("express");
 const { google } = require("googleapis");
 const fetch = require("node-fetch"); // v2
@@ -460,6 +460,7 @@ function isAdQuestion(text = "") {
 const MEMORY_MAX_MESSAGES_LEGACY = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
 const memory_LEGACY = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
 
+const shortMemory = new Map();
 function memPush(wa_id, role, content) {
   if (!wa_id) return;
   const text = String(content || "").trim();
@@ -472,6 +473,8 @@ function memPush(wa_id, role, content) {
   while (arr.length > MEMORY_MAX_MESSAGES) arr.shift();
   memory.set(wa_id, arr);
 }
+
+const shortMemory = new Map();
 
 function memGet(wa_id) {
   return memory.get(wa_id) || [];
