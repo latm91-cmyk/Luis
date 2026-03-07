@@ -69,14 +69,15 @@ async function geminiGenerateContent({ model, systemInstruction = "", contents =
   const endpoint = `https://generativelanguage.googleapis.com/v1/models/${selectedModel}:generateContent?key=${GEMINI_API_KEY}`;
 
   const payload = {
-    contents,
-  };
+  contents,
+};
 
-  if (systemInstruction) {
-    payload.systemInstruction = {
-      parts: [{ text: systemInstruction }],
-    };
-  }
+if (systemInstruction) {
+  contents.unshift({
+    role: "user",
+    parts: [{ text: systemInstruction }],
+  });
+}
 
   const resp = await fetch(endpoint, {
     method: "POST",
