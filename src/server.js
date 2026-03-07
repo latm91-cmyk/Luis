@@ -474,8 +474,6 @@ function memPush(wa_id, role, content) {
   memory.set(wa_id, arr);
 }
 
-const shortMemory = new Map();
-
 function memGet(wa_id) {
   return memory.get(wa_id) || [];
 }
