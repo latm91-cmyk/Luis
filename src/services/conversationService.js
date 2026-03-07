@@ -328,190 +328,169 @@ function createConversationService(deps) {
       }
 
       // =============================
-      // PEDIR NUMEROS DISPONIBLES
-      // =============================
+// PEDIR OTROS NUMEROS
+// =============================
 
-      const pideNumeros =
-        t.includes("numeros") ||
-        t.includes("números") ||
-        t.includes("boletas disponibles") ||
-        t.includes("ver numeros") ||
-        t.includes("ver boletas") ||
-        t.includes("que numeros") ||
-        t.includes("qué números") ||
-        t.includes("tienes numeros") ||
-        t.includes("tienes números") ||
-        t.includes("puedo escoger");
+const pideOtrosNumeros =
+  t === "otros" ||
+  t === "mas" ||
+  t === "más" ||
+  t.includes("otros numeros") ||
+  t.includes("otros números") ||
+  t.includes("más numeros") ||
+  t.includes("mas números") ||
+  t.includes("otros por favor") ||
+  t.includes("mas opciones") ||
+  t.includes("más opciones") ||
+  t.includes("no me gustaron") ||
+  t.includes("otra seleccion") ||
+  t.includes("otra selección") ||
+  t.includes("ver otros");
 
-      if (pideNumeros) {
+if (pideOtrosNumeros) {
 
-        const opciones = await getOpcionesBoletas({
-          sheetsRepository,
-          wa_id,
-          count: 5
-        });
+  const opciones = await getOpcionesBoletas({
+    sheetsRepository,
+    wa_id,
+    count: 5
+  });
 
-        if (!opciones.length) {
+  if (!opciones.length) {
+    await sendTextM(
+      wa_id,
+      "⚠️ Ya no quedan más boletas disponibles."
+    );
+    return;
+  }
 
-          await sendTextM(
-            wa_id,
-            "⚠️ En este momento no hay boletas disponibles."
-          );
+  let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
 
-          return;
-        }
+  opciones.forEach((b, i) => {
+    mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+  });
 
-        const conteo = await contarBoletasDisponibles(sheetsRepository);
+  mensaje += "\nResponde con el número de la opción que quieres.";
 
-        let mensaje =
-          `🎟️ Boletas disponibles: *${conteo.disponibles} / ${conteo.total}*\n\n`;
+  await sendTextM(wa_id, mensaje);
 
-        mensaje += "Estas boletas están disponibles:\n\n";
+  return;
+}
 
-        opciones.forEach((b, i) => {
-          mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-        });
 
-        mensaje += "\nResponde con el número de la opción que quieres.";
+// =============================
+// PEDIR NUMEROS DISPONIBLES
+// =============================
 
-        await sendTextM(wa_id, mensaje);
+const pideNumeros =
+  t.includes("numeros") ||
+  t.includes("números") ||
+  t.includes("boletas disponibles") ||
+  t.includes("ver numeros") ||
+  t.includes("ver boletas") ||
+  t.includes("que numeros") ||
+  t.includes("qué números") ||
+  t.includes("tienes numeros") ||
+  t.includes("tienes números") ||
+  t.includes("puedo escoger");
 
-        return;
-      }
+if (pideNumeros) {
 
-      // =============================
-      // SELECCIONAR BOLETA
-      // =============================
+  const opciones = await getOpcionesBoletas({
+    sheetsRepository,
+    wa_id,
+    count: 5
+  });
 
-      const opcion = text.match(/^[1-5]$/);
+  if (!opciones.length) {
 
-      if (opcion) {
-
-        const index = parseInt(opcion[0]);
-
-        const opciones = await getOpcionesBoletas({
-          sheetsRepository,
-          wa_id,
-          count: 5
-        });
-
-        const seleccion = seleccionarBoleta(opciones, index);
-
-        if (!seleccion) {
-
-          await sendTextM(
-            wa_id,
-            "❌ Esa opción no es válida. Elige un número del 1 al 5."
-          );
-
-          return;
-        }
-
-        const ok = await reservarBoletaSegura(
-          sheetsRepository.sheets,
-          sheetsRepository.sheetId,
-          "boletas_index",)
-        }
-        
-        // =============================
-        // PEDIR NUMEROS DISPONIBLES
-        // =============================
-
-        const pideNumeros =
-          t.includes("numeros") ||
-          t.includes("números") ||
-          t.includes("boletas disponibles") ||
-          t.includes("ver numeros") ||
-          t.includes("ver boletas") ||
-          t.includes("que numeros") ||
-          t.includes("qué números") ||
-          t.includes("tienes numeros") ||
-          t.includes("tienes números") ||
-          t.includes("puedo escoger");
-
-        if (pideNumeros) {
-
-          const opciones = await getOpcionesBoletas({
-            sheetsRepository,
-            wa_id,
-            count: 5
-          });
-
-          if (!opciones.length) {
-
-            await sendTextM(
-              wa_id,
-              "⚠️ En este momento no hay boletas disponibles."
-            );
-
-            return;
-          }
-
-          // contador de boletas
-          const conteo = await contarBoletasDisponibles(sheetsRepository);
-
-          let mensaje =
-            `🎟️ *Boletas disponibles:* ${conteo.disponibles} / ${conteo.total}\n\n`;
-
-          mensaje += "Estas boletas están disponibles:\n\n";
-
-          opciones.forEach((b, i) => {
-            mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-          });
-
-          mensaje += "\nResponde con el número de la opción que quieres.";
-
-          await sendTextM(wa_id, mensaje);
-
-          return;
-        }
-
-        seleccion.boleta,
-          wa_id
+    await sendTextM(
+      wa_id,
+      "⚠️ En este momento no hay boletas disponibles."
     );
 
-        if (!ok) {
+    return;
+  }
 
-          await sendTextM(
-            wa_id,
-            "⚠️ Esa boleta ya fue reservada por otro cliente. Te muestro otras."
-          );
+  const conteo = await contarBoletasDisponibles(sheetsRepository);
 
-          resetOpciones(wa_id);
+  let mensaje =
+    `🎟️ Boletas disponibles: *${conteo.disponibles} / ${conteo.total}*\n\n`;
 
-          const nuevas = await getOpcionesBoletas({
-            sheetsRepository,
-            wa_id,
-            count: 5
-          });
+  mensaje += "Estas boletas están disponibles:\n\n";
 
-          let mensaje = "🎟️ Estas otras boletas están disponibles:\n\n";
+  opciones.forEach((b, i) => {
+    mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
+  });
 
-          nuevas.forEach((b, i) => {
-            mensaje += `${i + 1}️⃣ ${b.boleta}\n`;
-          });
+  mensaje += "\nResponde con el número de la opción que quieres.";
 
-          mensaje += "\nResponde con el número de la opción que quieres.";
+  await sendTextM(wa_id, mensaje);
 
-          await sendTextM(wa_id, mensaje);
+  return;
+}
 
-          return;
-        }
 
-        resetOpciones(wa_id);
+// =============================
+// SELECCIONAR BOLETA
+// =============================
 
-        const reply =
-          `✅ Boleta reservada: *${seleccion.boleta}*\n\n` +
-          `Ahora puedes pagar:\n\n` +
-          `Nequi / Daviplata\n` +
-          `📲 3223146142\n\n` +
-          `Envía el comprobante + nombre + municipio.`;
+const opcion = text.match(/^[1-5]$/);
 
-        await sendTextM(wa_id, reply);
+if (opcion) {
 
-        return;
-      }
+  const index = parseInt(opcion[0]);
 
+  const opciones = await getOpcionesBoletas({
+    sheetsRepository,
+    wa_id,
+    count: 5
+  });
+
+  const seleccion = seleccionarBoleta(opciones, index);
+
+  if (!seleccion) {
+
+    await sendTextM(
+      wa_id,
+      "❌ Esa opción no es válida. Elige un número del 1 al 5."
+    );
+
+    return;
+  }
+
+  const ok = await reservarBoletaSegura(
+    sheetsRepository.sheets,
+    sheetsRepository.sheetId,
+    "boletas_index",
+    seleccion.boleta,
+    wa_id
+  );
+
+  if (!ok) {
+
+    await sendTextM(
+      wa_id,
+      "⚠️ Esa boleta ya fue reservada por otro cliente. Te muestro otras."
+    );
+
+    resetOpciones(wa_id);
+
+    return;
+  }
+
+  resetOpciones(wa_id);
+
+  const reply =
+    `✅ Boleta reservada: *${seleccion.boleta}*\n\n` +
+    `Ahora puedes pagar:\n\n` +
+    `Nequi / Daviplata\n` +
+    `📲 3223146142\n\n` +
+    `Envía el comprobante + nombre + municipio.`;
+
+  await sendTextM(wa_id, reply);
+
+  return;
+}
       // =============================
       // RESPUESTA IA
       // =============================
