@@ -358,8 +358,10 @@ async function contarBoletasDisponibles(sheetsRepository) {
 }
 
 module.exports = {
-  reservarBoletas,
-  liberarReservasExpiradas,
+  reservarBoletaSegura,
   reservarMultiplesBoletas,
-  getBoletasReservadasCliente
+  confirmarVenta,
+  liberarBoleta,
+  getBoletasReservadasCliente,
+  contarBoletasDisponibles
 };
