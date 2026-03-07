@@ -1362,7 +1362,14 @@ if (type === "audio") {
     const state = await getLatestStateByWaId(wa_id);
     const stage = await getConversationStage(wa_id);
     const aiReplyRaw = await askGemini(wa_id, text, state);
-    const aiReply = humanizeIfJson(aiReplyRaw);
+    
+    const { cleanText, action } = processAiAction(aiReplyRaw);
+    if (action) {
+      console.log(`🤖 ACCIÓN IA (Audio): Reservar`, action.boletas);
+      // TODO: Implementar reserva en Sheets aquí
+    }
+
+    const aiReply = humanizeIfJson(cleanText);
 
     const reply = await withGreeting(wa_id, aiReply);
 
@@ -1692,7 +1699,14 @@ if (type === "text") {
   //    Recomendado: pasar stage por SYSTEM (sin meterlo en el texto del usuario)
   // ------------------------------------------------------------
   const aiReplyRaw = await askGemini(wa_id, text, state);
-  const aiReply = humanizeIfJson(aiReplyRaw);
+  
+  const { cleanText, action } = processAiAction(aiReplyRaw);
+  if (action) {
+    console.log(`🤖 ACCIÓN IA (Texto): Reservar`, action.boletas);
+    // TODO: Implementar reserva en Sheets aquí
+  }
+
+  const aiReply = humanizeIfJson(cleanText);
 
   const replyAI = await withGreeting(wa_id, aiReply);
 
