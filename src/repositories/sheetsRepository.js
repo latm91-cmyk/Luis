@@ -8,6 +8,25 @@ function todayYYMMDD() {
   return `${yy}${mm}${dd}`;
 }
 
+async function getBoletas() {
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "boletas_index!A2:E"
+  });
+
+  const rows = res.data.values || [];
+
+  return rows.map(r => ({
+    boleta: r[0],
+    estado: r[1],
+    cliente: r[2],
+    fecha: r[3],
+    referencia: r[4]
+  }));
+
+}
+
 function createSheetsRepository({ sheets }) {
   async function getAllSessionsRowsAtoF() {
     if (!sheets) return [];
@@ -197,4 +216,12 @@ function createSheetsRepository({ sheets }) {
   };
 }
 
-module.exports = { createSheetsRepository };
+module.exports = {
+  getBoletas,
+  touchSession,
+  saveConversation,
+  createReference,
+  getLatestStateByWaId,
+  setConversationStage,
+  getConversationStage
+};
