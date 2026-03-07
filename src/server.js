@@ -1,5 +1,6 @@
 // ===== server.js (AVANZADO + HÍBRIDO, SIN BORRAR FUNCIONES) =====
 require("dotenv").config();
+console.log("GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? "CARGADA ✅" : "NO CARGADA ❌");
 const express = require("express");
 const { google } = require("googleapis");
 const fetch = require("node-fetch"); // v2
