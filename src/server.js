@@ -47,9 +47,12 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 // Gemini
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
-const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || "gemini-2.5-flash";
-const GEMINI_MODEL_VISION = process.env.GEMINI_MODEL_VISION || "gemini-2.5-flash";
+const GEMINI_MODEL_TEXT =
+  process.env.GEMINI_MODEL_TEXT || "gemini-2.5-flash";
 
+const GEMINI_MODEL_VISION =
+  process.env.GEMINI_MODEL_VISION || "gemini-2.5-flash";
+  
 // Control follow-up de ventas (1 solo recordatorio)
 const followUps = new Map();
 
@@ -455,23 +458,21 @@ function isAdQuestion(text = "") {
 }
 
 /* ============================================================
-   MEMORIA TEMPORAL (RAM) - últimos N mensajes por cliente
-   - No toca Sheets, no toca Telegram.
-   - Solo envuelve sendText y askGemini.
+   MEMORIA DE CONVERSACIÓN UNIFICADA (RAM)
    ============================================================ */
 
-const MEMORY_MAX_MESSAGES_LEGACY = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
-const memory_LEGACY = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
+const MEMORY_MAX_MESSAGES = Number(process.env.MEMORY_TURNS || 12); // 12 mensajes totales (6 turnos)
+const memory = new Map(); // wa_id -> [{ role:"user"|"model", content:"...", ts:"..." }]
 
-const shortMemory = new Map();
 function memPush(wa_id, role, content) {
   if (!wa_id) return;
   const text = String(content || "").trim();
   if (!text) return;
 
   const arr = memory.get(wa_id) || [];
-  // Mapear roles para consistencia interna (user/assistant)
-  arr.push({ role, content: text.slice(0, 1500), ts: new Date().toISOString() });
+  // Rol para Gemini: 'user' o 'model'
+  const geminiRole = (role === "assistant" || role === "model") ? "model" : "user";
+  arr.push({ role: geminiRole, content: text.slice(0, 1500), ts: new Date().toISOString() });
 
   while (arr.length > MEMORY_MAX_MESSAGES) arr.shift();
   memory.set(wa_id, arr);
@@ -481,42 +482,15 @@ function memGet(wa_id) {
   return memory.get(wa_id) || [];
 }
 
-function memClear(wa_id) {
-  memory.delete(wa_id);
-}
-
 /**
  * Wrapper: enviar WhatsApp + guardar memoria OUT
- * MISMA FIRMA que tu sendText(to, bodyText, ref_id?)
  */
 async function sendTextM(to, bodyText, ref_id = "") {
-  // llama tu función real
   const r = await sendText(to, bodyText, ref_id);
-  // guarda memoria solo si envió OK (opcional)
-  memPush(to, "assistant", bodyText);
+  if (r.ok) {
+    memPush(to, "assistant", bodyText);
+  }
   return r;
-}
-
-/**
- * Wrapper: Gemini con memoria
- * MISMA idea que askGemini(userText, state) pero recibe wa_id para saber qu® memoria usar.
- * Ajusta si tu askGemini original ya recibe (userText, state)
- */
-async function askGeminiM(wa_id, userText, state = "BOT") {
-  // Delegar a askGemini para mantener una sola lógica de IA + memoria
-  return await askGemini(wa_id, userText, state);
-}
-
-/**
- * Helper opcional: registrar IN (texto) en memoria y en Sheets si quieres llamarlo siempre
- * (No reemplaza tu saveConversation, solo te facilita)
- */
-async function onIncomingText(wa_id, text) {
-  // Memoria IN
-  memPush(wa_id, "user", text);
-
-  // Si quieres tambi®n guardar en Sheets aquí, descomenta:
-  // await saveConversation({ wa_id, direction: "IN", message: text });
 }
 
 /* =================== FIN BLOQUE MEMORIA =================== */
@@ -1091,30 +1065,6 @@ function normalize(parsed) {
 }
 
 // =============================
-// GEMINI TEXT (estable)
-// =============================
-
-function memPush(wa_id, role, content) {
-  if (!wa_id) return;
-
-  const arr = shortMemory.get(wa_id) || [];
-  arr.push({
-    role,
-    content: String(content || "").slice(0, 1500),
-  });
-
-  // Mantener solo últimos 20 mensajes
-  while (arr.length > 20) arr.shift();
-
-  shortMemory.set(wa_id, arr);
-}
-
-function memGet(wa_id) {
-  return shortMemory.get(wa_id) || [];
-}
-
-
-// =============================
 // GEMINI TEXT (con memoria)
 // =============================
 async function askGemini(wa_id, userText, state = "BOT") {
@@ -1125,7 +1075,7 @@ async function askGemini(wa_id, userText, state = "BOT") {
   const history = memGet(wa_id);
   const contents = history
     .map((msg) => {
-      const role = msg.role === "assistant" ? "model" : "user";
+      const role = (msg.role === "assistant" || msg.role === "model") ? "model" : "user";
       const text = String(msg.content || "").trim();
       if (!text) return null;
       return { role, parts: [{ text }] };
@@ -1133,6 +1083,8 @@ async function askGemini(wa_id, userText, state = "BOT") {
     .filter(Boolean);
 
   contents.push({
+    // El mensaje del usuario ya está en `history` gracias al webhook.
+    // Esta línea es para asegurar que el mensaje actual se incluya si no se guardó antes.
     role: "user",
     parts: [{ text: String(userText || "") }],
   });
@@ -1148,11 +1100,10 @@ async function askGemini(wa_id, userText, state = "BOT") {
 
   const output = String(outputRaw || "").trim() || "Me repites, por favor?";
 
-  // Guardar memoria (usuario y asistente)
-  memPush(wa_id, "user", userText);
+  // ✅ CORRECCIÓN: Guardar solo la respuesta del asistente. El mensaje del usuario ya se guardó en el webhook.
   memPush(wa_id, "assistant", output);
 
-return output;}
+  return output;}
 
 /* ================= MONITOR APROBADOS ================= */
 
@@ -1422,6 +1373,9 @@ if (type === "text") {
   // 🔹 LOG IN (texto recibido)
   await safeConversationLog("IN", wa_id, text);
   console.log(`📩 Mensaje de ${wa_id}: ${text}`);
+
+  // ✅ Guardar mensaje del usuario en la memoria UNIFICADA
+  memPush(wa_id, "user", text);
 
   // Guardar conversación (solo una vez por mensaje)
   await saveConversation({ wa_id, direction: "IN", message: text });
