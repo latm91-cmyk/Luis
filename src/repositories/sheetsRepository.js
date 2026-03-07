@@ -246,6 +246,16 @@ async function touchSession(wa_id) {
 
 }
 
+    async function updateCell(rangeA1, value) {
+    if (!sheets) return;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${CASES_TAB}!${rangeA1}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[value]] },
+    });
+  }
+
   return {
     sheets,
     hasGreeted,
@@ -258,7 +268,7 @@ async function touchSession(wa_id) {
     getLatestStateByWaId,
     createReference,
     findRowByRef,
-    updateCell
+    updateCell,
   };
 
 module.exports = {
