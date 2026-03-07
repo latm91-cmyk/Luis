@@ -265,12 +265,22 @@ async function touchSession(wa_id) {
 
 }
 
+return {
+    sheets,
+    hasGreeted,
+    markGreeted,
+    touchSession,
+    setConversationStage,
+    getConversationStage,
+    saveConversation,
+    getAllRowsAtoH,
+    getLatestStateByWaId,
+    createReference,
+    findRowByRef,
+    updateCell
+  };
+}
+
 module.exports = {
-  getBoletas,
-  touchSession,
-  saveConversation,
-  createReference,
-  getLatestStateByWaId,
-  setConversationStage,
-  getConversationStage
+  createSheetsRepository
 };
