@@ -1805,6 +1805,7 @@ app.post("/telegram-webhook", async (req, res) => {
 
     res.sendStatus(200);
 
+    const { telegramSendMessage, extractRef } = require("./utils/logger");
     if (!TELEGRAM_BOT_TOKEN || !sheets) return;
 
     const msg = req.body?.message;
@@ -1828,7 +1829,7 @@ app.post("/telegram-webhook", async (req, res) => {
       return;
     }
 
-    const found = await findRowByRef(ref);
+    const found = await sheetsService.findRowByRef(sheets, SHEET_ID, ref);
     if (!found) {
       if (chat_id) await telegramSendMessage(chat_id, `❌ No encontr® esa referencia en la hoja: ${ref}`);
       return;
@@ -1839,14 +1840,14 @@ app.post("/telegram-webhook", async (req, res) => {
       return;
     }
 
-    const file_path = await telegramGetFilePath(file_id);
-    const imgBuffer = await telegramDownloadFileBuffer(file_path);
+    const file_path = await logger.telegramGetFilePath(file_id);
+    const imgBuffer = await logger.telegramDownloadFileBuffer(file_path);
 
-    const mediaId = await whatsappUploadImageBuffer(imgBuffer, "image/jpeg");
-    await sendImageByMediaId(found.wa_id, mediaId, `🎟️ Boleta enviada ✅ (${ref})`);
+    const mediaId = await sender.whatsappUploadImageBuffer(imgBuffer, "image/jpeg");
+    await sender.sendImageByMediaId(sheets, SHEET_ID, found.wa_id, mediaId, `🎟️ Boleta enviada ✅ (${ref})`);
 
     if (found.state !== "BOLETA_ENVIADA") {
-      await updateCell(`D${found.rowNumber}`, "BOLETA_ENVIADA");
+      await sheetsService.updateCell(sheets, SHEET_ID, `D${found.rowNumber}`, "BOLETA_ENVIADA");
     }
 
     if (chat_id) await telegramSendMessage(chat_id, `✅ Envie la boleta al cliente (${found.wa_id}) y marque BOLETA_ENVIADA. (${ref})`);
