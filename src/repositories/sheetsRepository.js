@@ -261,8 +261,6 @@ async function touchSession(wa_id) {
     updateCell
   };
 
-}
-
 module.exports = {
   createSheetsRepository
 };
