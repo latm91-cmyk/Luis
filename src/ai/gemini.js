@@ -7,8 +7,8 @@ async function geminiGenerateContent({ model, systemInstruction = '', contents =
     throw new Error('GEMINI_API_KEY no configurada');
   }
 
-  const selectedModel = String(model || '').trim() || 'gemini-1.5-flash';
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${GEMINI_API_KEY}`;
+  const selectedModel = String(model || '').trim() || 'gemini-2.5-flash';
+  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${selectedModel}:generateContent?key=${GEMINI_API_KEY}`;
 
   const payload = { contents };
 
