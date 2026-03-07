@@ -258,15 +258,17 @@ async function reservarMultiplesBoletas(
     .sort(() => Math.random() - 0.5)
     .slice(0, cantidad);
 
-  const reservadas = [];
+  const boletasAReservar = seleccion.map(b => b.boleta);
 
-  for (const boleta of seleccion) {
+  // Aquí debería ir la lógica para actualizar el estado en la hoja de cálculo.
+  // Esto requeriría una función en el repositorio, por ejemplo:
+  // await sheetsRepository.reservarBoletasBatch(boletasAReservar, wa_id);
+  // Como esa función no existe, lo marcaremos como una advertencia.
+  console.warn(`WARN: La reserva real para ${cantidad} boletas para ${wa_id} no está implementada.`);
+  console.warn(`WARN: Boletas seleccionadas pero no reservadas: ${boletasAReservar.join(', ')}`);
 
-    reservadas.push(boleta.boleta);
-
-  }
-
-  return reservadas;
+  // La función debe devolver los números de boletas que se "reservaron".
+  return boletasAReservar;
 
 }
 

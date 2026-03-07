@@ -423,9 +423,7 @@ if (opcion) {
   }
 
   const ok = await reservarBoletaSegura(
-    sheetsRepository.sheets,
-    sheetsRepository.sheetId,
-    "boletas_index",
+    sheetsRepository, // Se pasa el repositorio completo
     seleccion.boleta,
     wa_id
   );

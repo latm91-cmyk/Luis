@@ -390,7 +390,6 @@ function createSheetsRepository({ sheets }) {
 }
 
   return {
-    sheets,
     getBoletas,
     hasGreeted,
     markGreeted,
