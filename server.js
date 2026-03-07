@@ -1148,7 +1148,7 @@ async function askGemini(wa_id, userText, state = "BOT") {
   memPush(wa_id, "user", userText);
   memPush(wa_id, "assistant", output);
 
-  } catch (error) {
+  catch (error) {
     console.error("❌ Error crítico en Gemini:", error);
     return "hola, bienvenido a rifas el agropecuario, en este momento nos encontramos realizando mantenimiento a nuestro servidor, escribenos al numero 3003960782";
   }
