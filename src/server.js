@@ -46,8 +46,12 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
 // Gemini
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_MODEL_TEXT = process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash";
-const GEMINI_MODEL_VISION = process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash";
+
+const GEMINI_MODEL_TEXT =
+  process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash-latest";
+
+const GEMINI_MODEL_VISION =
+  process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash-latest";
 
 // Control follow-up de ventas (1 solo recordatorio)
 const followUps = new Map();
