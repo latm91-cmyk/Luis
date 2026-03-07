@@ -460,27 +460,6 @@ function isAdQuestion(text = "") {
 const MEMORY_MAX_MESSAGES_LEGACY = Number(process.env.MEMORY_TURNS || 10); // 10 mensajes totales
 const memory_LEGACY = new Map(); // wa_id -> [{ role:"user"|"assistant", content:"...", ts:"..." }]
 
-function memPush(wa_id, role, content) {
-  if (!wa_id) return;
-  const text = String(content || "").trim();
-  if (!text) return;
-
-  const arr = memory.get(wa_id) || [];
-  // Mapear roles para consistencia interna (user/assistant)
-  arr.push({ role, content: text.slice(0, 1500), ts: new Date().toISOString() });
-
-  while (arr.length > MEMORY_MAX_MESSAGES) arr.shift();
-  memory.set(wa_id, arr);
-}
-
-function memGet(wa_id) {
-  return memory.get(wa_id) || [];
-}
-
-function memClear(wa_id) {
-  memory.delete(wa_id);
-}
-
 /**
  * Wrapper: enviar WhatsApp + guardar memoria OUT
  * MISMA FIRMA que tu sendText(to, bodyText, ref_id?)
@@ -1089,17 +1068,18 @@ function normalize(parsed) {
 // =============================
 // GEMINI TEXT (estable)
 // =============================
+const shortMemory = new Map();
 
 function memPush(wa_id, role, content) {
   if (!wa_id) return;
 
   const arr = shortMemory.get(wa_id) || [];
+
   arr.push({
     role,
     content: String(content || "").slice(0, 1500),
   });
 
-  // Mantener solo últimos 20 mensajes
   while (arr.length > 20) arr.shift();
 
   shortMemory.set(wa_id, arr);
@@ -1114,47 +1094,46 @@ function memGet(wa_id) {
 // GEMINI TEXT (con memoria)
 // =============================
 async function askGemini(wa_id, userText, state = "BOT") {
-  if (!GEMINI_API_KEY) {
-    return "Te gustaría participar o conocer precios de boletas?";
-  }
+  try {
 
-  const history = memGet(wa_id);
-  const contents = history
-    .map((msg) => {
-      const role = msg.role === "assistant" ? "model" : "user";
-      const text = String(msg.content || "").trim();
-      if (!text) return null;
-      return { role, parts: [{ text }] };
-    })
-    .filter(Boolean);
+    if (!GEMINI_API_KEY) {
+      return "Te gustaría participar o conocer precios de boletas?";
+    }
 
-  contents.push({
-    role: "user",
-    parts: [{ text: String(userText || "") }],
-  });
+    const history = memGet(wa_id);
 
-  const outputRaw = await geminiGenerateContent({
-    model: GEMINI_MODEL_TEXT,
-    systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
-    contents,
-  }).catch((error) => {
-    console.error("❌ Error Gemini texto:", error?.message || error);
-    return "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
-  });
+    const contents = history
+      .map((msg) => {
+        const role = msg.role === "assistant" ? "model" : "user";
+        const text = String(msg.content || "").trim();
+        if (!text) return null;
+        return { role, parts: [{ text }] };
+      })
+      .filter(Boolean);
 
-  const output = String(outputRaw || "").trim() || "Me repites, por favor?";
+    contents.push({
+      role: "user",
+      parts: [{ text: String(userText || "") }],
+    });
 
-  // Guardar memoria (usuario y asistente)
-  memPush(wa_id, "user", userText);
-  memPush(wa_id, "assistant", output);
+    const outputRaw = await geminiGenerateContent({
+      model: GEMINI_MODEL_TEXT,
+      systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
+      contents,
+    });
 
-  catch (error) {
+    const output = String(outputRaw || "").trim() || "Me repites, por favor?";
+
+    memPush(wa_id, "user", userText);
+    memPush(wa_id, "assistant", output);
+
+    return output;
+
+  } catch (error) {
     console.error("❌ Error crítico en Gemini:", error);
-    return "hola, bienvenido a rifas el agropecuario, en este momento nos encontramos realizando mantenimiento a nuestro servidor, escribenos al numero 3003960782";
+    return "Hola, en este momento estamos realizando mantenimiento. Escríbenos al 3003960782.";
   }
 }
-
-
 /* ================= MONITOR APROBADOS ================= */
 
 async function monitorAprobados() {
@@ -1351,7 +1330,10 @@ app.post("/webhook", async (req, res) => {
     // =========================
 // AUDIO (nota de voz / audio)
 // =========================
-if (type === "audio") {
+async function transcribeWhatsAppAudio(mediaId) {
+  return "audio recibido";
+}
+    if (type === "audio") {
   const mediaId = msg.audio?.id;
 
   // 🔹 LOG IN (audio recibido)
