@@ -1,5 +1,5 @@
 const fetch = require("node-fetch");
-const { memGet, memPush } = require("../boletas/boletasMemory");
+const { memGet, memPush } = require("../memory/boletasMemory");
 const { SYSTEM_PROMPT } = require("./prompt");
 const { downloadWhatsAppMediaAsBuffer, fetchWhatsAppMediaUrl } = require("../whatsapp/sender");
 
