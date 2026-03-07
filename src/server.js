@@ -7,6 +7,7 @@ const fetch = require("node-fetch"); // v2
 const crypto = require("crypto");
 const FormData = require("form-data");
 const axios = require("axios");
+const reservas = require("./modules/reservas"); // ✅ IMPORTAR MÓDULO
 
 const app = express();
 
@@ -27,6 +28,7 @@ const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const CASES_TAB = process.env.GOOGLE_SHEET_TAB || "cases";
 const CONV_TAB = process.env.GOOGLE_SHEET_CONV_TAB || "conversations";
 const SESSIONS_TAB = process.env.GOOGLE_SHEET_SESS_TAB || "sessions";
+const BOLETAS_TAB = process.env.GOOGLE_SHEET_BOLETAS_TAB || "boletas"; // ✅ NUEVA TABLA
 
 // Google auth
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
@@ -364,6 +366,41 @@ ________________________________________
 ASIGNACIÓN DE NÚMERO
 Cuando un cliente pida números disponibles o pregunte por números, el sistema te entregará una lista de boletas disponibles.
 Debes responder al cliente de forma clara, amigable y explicar siempre cómo funcionan las boletas.
+
+REGLA DE RESERVA DE BOLETAS
+
+Cuando un cliente elija una o varias boletas, debes informarle que las boletas quedan reservadas temporalmente mientras envía el comprobante de pago.
+
+Las reservas funcionan así:
+
+• Durante el horario normal de atención, las boletas se reservan por un tiempo limitado mientras el cliente envía el comprobante.
+
+• Si la compra se realiza entre las 8:30 pm y las 8:30 am, el tiempo de reserva comienza a contar desde las 8:30 am del día siguiente.
+
+Esto se hace para evitar que los clientes pierdan su reserva durante la noche cuando no hay verificación de pagos.
+
+Nunca prometas tiempos exactos diferentes a esta regla.
+
+Ejemplo de confirmación correcta:
+
+"Perfecto 👍
+
+Las siguientes boletas quedaron reservadas para ti:
+
+5191-4452  
+2405-1178  
+
+Puedes realizar el pago por Nequi o Daviplata y enviarme el comprobante junto con tu nombre completo, municipio y número de celular.
+
+Las boletas quedan reservadas temporalmente mientras se verifica el pago.  
+Si la compra se realiza después de las 8:30 pm, la reserva se mantiene y el tiempo empieza a contar desde las 8:30 am."
+
+Reglas importantes:
+
+1. Nunca inventes tiempos de reserva.
+2. Nunca digas que la reserva es permanente.
+3. Siempre recuerda que la reserva depende de la confirmación del pago.
+4. Si el cliente pregunta cuánto tiempo tiene para pagar, explica la regla anterior.
 
 Ejemplo de respuesta correcta:
 "Te puedo ofrecer estas boletas disponibles:
@@ -1366,7 +1403,8 @@ if (type === "audio") {
     const { cleanText, action } = processAiAction(aiReplyRaw);
     if (action) {
       console.log(`🤖 ACCIÓN IA (Audio): Reservar`, action.boletas);
-      // TODO: Implementar reserva en Sheets aquí
+      // ✅ IMPLEMENTACIÓN RESERVA
+      await reservas.reservarBoletas(sheets, SHEET_ID, BOLETAS_TAB, action.boletas, wa_id);
     }
 
     const aiReply = humanizeIfJson(cleanText);
@@ -1703,7 +1741,8 @@ if (type === "text") {
   const { cleanText, action } = processAiAction(aiReplyRaw);
   if (action) {
     console.log(`🤖 ACCIÓN IA (Texto): Reservar`, action.boletas);
-    // TODO: Implementar reserva en Sheets aquí
+    // ✅ IMPLEMENTACIÓN RESERVA
+    await reservas.reservarBoletas(sheets, SHEET_ID, BOLETAS_TAB, action.boletas, wa_id);
   }
 
   const aiReply = humanizeIfJson(cleanText);
@@ -1920,6 +1959,10 @@ app.post("/telegram-webhook", async (req, res) => {
 /* ================= START ================= */
 
 setInterval(monitorAprobados, 30000);
+
+// ✅ INTERVALO DE LIBERACIÓN (Cada 5 minutos)
+setInterval(() => reservas.liberarReservasExpiradas(sheets, SHEET_ID, BOLETAS_TAB), 5 * 60 * 1000);
+console.log("⏰ Sistema de expiración de reservas activo.");
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
