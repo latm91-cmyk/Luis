@@ -10,19 +10,31 @@ async function geminiGenerateContent({ model, systemInstruction = "", contents =
     throw new Error("GEMINI_API_KEY no configurada");
   }
 
-  const selectedModel = String(model || "").trim() || "gemini-1.5-flash";
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${GEMINI_API_KEY}`;
+  const selectedModel = String(model || "").trim() || "gemini-2.5-flash";
 
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1/models/${selectedModel}:generateContent?key=${GEMINI_API_KEY}`;
+
+  // 🔧 FIX: systemInstruction ahora se agrega dentro de contents
   const payload = {
-    contents,
-    systemInstruction: {
-      parts: [{ text: systemInstruction }]
-    }
+    contents: [
+      ...(systemInstruction
+        ? [
+            {
+              role: "user",
+              parts: [{ text: systemInstruction }],
+            },
+          ]
+        : []),
+      ...contents,
+    ],
   };
 
   const resp = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(payload),
   });
 
@@ -38,6 +50,7 @@ async function geminiGenerateContent({ model, systemInstruction = "", contents =
 
   const firstCandidate = data?.candidates?.[0] || {};
   const finishReason = firstCandidate?.finishReason || "";
+
   const joinedText =
     firstCandidate?.content?.parts
       ?.map((p) => p.text || "")
@@ -57,17 +70,26 @@ async function askGemini(wa_id, userText, state = "BOT") {
   }
 
   const history = memGet(wa_id);
+
   const contents = history
     .map((msg) => {
-      const role = (msg.role === "assistant" || msg.role === "model") ? "model" : "user";
+      const role =
+        msg.role === "assistant" || msg.role === "model"
+          ? "model"
+          : "user";
+
       const text = String(msg.content || "").trim();
       if (!text) return null;
-      return { role, parts: [{ text }] };
+
+      return {
+        role,
+        parts: [{ text }],
+      };
     })
     .filter(Boolean);
 
   const outputRaw = await geminiGenerateContent({
-    model: process.env.GEMINI_MODEL_TEXT || "gemini-1.5-flash",
+    model: process.env.GEMINI_MODEL_TEXT || "gemini-2.5-flash",
     systemInstruction: `${SYSTEM_PROMPT}\n\nEstado actual del cliente: ${state}`,
     contents,
   }).catch((error) => {
@@ -75,7 +97,8 @@ async function askGemini(wa_id, userText, state = "BOT") {
     return "Lo siento, estoy teniendo problemas de conexión. ¿Podrías repetirme eso?";
   });
 
-  const output = String(outputRaw || "").trim() || "Me repites, por favor?";
+  const output =
+    String(outputRaw || "").trim() || "Me repites, por favor?";
 
   memPush(wa_id, "assistant", output);
 
@@ -83,11 +106,17 @@ async function askGemini(wa_id, userText, state = "BOT") {
 }
 
 async function classifyPaymentImage({ mediaId }) {
-  if (!GEMINI_API_KEY)
-    return { label: "DUDA", confidence: 0, why: "GEMINI_API_KEY no configurada" };
+  if (!GEMINI_API_KEY) {
+    return {
+      label: "DUDA",
+      confidence: 0,
+      why: "GEMINI_API_KEY no configurada",
+    };
+  }
 
   const mediaUrl = await fetchWhatsAppMediaUrl(mediaId);
   const { buf, mimeType } = await downloadWhatsAppMediaAsBuffer(mediaUrl);
+
   const b64Image = buf.toString("base64");
 
   const prompt = `Clasifica la imagen en UNA sola etiqueta: COMPROBANTE, PUBLICIDAD, OTRO o DUDA.
@@ -98,9 +127,20 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
 
   const out = (
     await geminiGenerateContent({
-      model: process.env.GEMINI_MODEL_VISION || "gemini-1.5-flash",
+      model: process.env.GEMINI_MODEL_VISION || "gemini-2.5-flash",
       contents: [
-        { role: "user", parts: [{ text: prompt }, { inlineData: { data: b64Image, mimeType } }] },
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: b64Image,
+                mimeType,
+              },
+            },
+          ],
+        },
       ],
     })
   ).trim();
@@ -108,4 +148,8 @@ Devuelve SOLO JSON: {"label":"...","confidence":0-1,"why":"..."}`;
   return out;
 }
 
-module.exports = { askGemini, classifyPaymentImage, geminiGenerateContent };
+module.exports = {
+  askGemini,
+  classifyPaymentImage,
+  geminiGenerateContent,
+};
